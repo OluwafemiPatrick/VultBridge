@@ -35,6 +35,15 @@ public final class FixedHeaderCodec {
     return encoded;
   }
 
+  /** Encodes one complete authenticated-slot representation for positional installation. */
+  public static byte[] encodeSlot(UnverifiedHeaderSlot slot) {
+    Objects.requireNonNull(slot, "slot");
+    ByteBuffer output =
+        ByteBuffer.allocate(VaultFormat.HEADER_SLOT_BYTES).order(ByteOrder.BIG_ENDIAN);
+    writeSlot(output, slot);
+    return output.array();
+  }
+
   /** Parses exactly one fixed header without authenticating its wrapped key or slots. */
   public static UnverifiedFixedHeader parse(byte[] encoded) throws HeaderParsingException {
     Objects.requireNonNull(encoded, "encoded");

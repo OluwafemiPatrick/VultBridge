@@ -154,6 +154,11 @@ public final class VaultEncoding {
     return writtenBytes(output);
   }
 
+  /** Produces the all-zero nonce required by single-body MANIFEST and COMMIT records. */
+  public static byte[] singleRecordNonce() {
+    return new byte[VaultFormat.AEAD_NONCE_BYTES];
+  }
+
   /** Produces the canonical HMAC input for one mutable header slot. */
   public static byte[] slotMacInput(
       byte[] vaultId,

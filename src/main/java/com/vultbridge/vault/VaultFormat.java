@@ -11,6 +11,7 @@ public final class VaultFormat {
   public static final String MAGIC = "VULTBRDG";
   public static final int FORMAT_MAJOR = 1;
   public static final int HEADER_VERSION = 1;
+  public static final int RECORD_SCHEMA_VERSION = 1;
   public static final int KDF_ID_ARGON2ID = 1;
   public static final int ARGON2_VERSION_13 = 0x13;
 
@@ -29,6 +30,7 @@ public final class VaultFormat {
   public static final int FILE_CHUNK_PLAINTEXT_BYTES = 4 * 1024 * 1024;
   public static final int MAXIMUM_MANIFEST_PLAINTEXT_BYTES = 16 * 1024 * 1024;
   public static final int MAXIMUM_COMMIT_PLAINTEXT_BYTES = 64 * 1024;
+  public static final int MAXIMUM_DISPLAY_NAME_UTF8_BYTES = 1024;
 
   public static final int ARGON2_CREATE_MEMORY_KIB = 65_536;
   public static final int ARGON2_CREATE_ITERATIONS = 3;
@@ -46,6 +48,8 @@ public final class VaultFormat {
   public static final int HEADER_SLOT_BYTES = 80;
   public static final int FIXED_HEADER_BYTES =
       PRELUDE_BYTES + IMMUTABLE_HEADER_BYTES + (2 * HEADER_SLOT_BYTES);
+  public static final int HEADER_SLOT_A_OFFSET = PRELUDE_BYTES + IMMUTABLE_HEADER_BYTES;
+  public static final int HEADER_SLOT_B_OFFSET = HEADER_SLOT_A_OFFSET + HEADER_SLOT_BYTES;
   public static final int RECORD_FRAME_HEADER_BYTES = 24;
 
   public static final int ROLE_COMMIT = 1;

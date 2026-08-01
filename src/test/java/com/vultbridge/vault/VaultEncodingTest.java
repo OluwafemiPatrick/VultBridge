@@ -83,6 +83,13 @@ class VaultEncodingTest {
   }
 
   @Test
+  void singleRecordNonceIsAlwaysAFreshAllZeroValue() {
+    byte[] first = VaultEncoding.singleRecordNonce();
+    first[0] = 1;
+    assertArrayEquals(new byte[VaultFormat.AEAD_NONCE_BYTES], VaultEncoding.singleRecordNonce());
+  }
+
+  @Test
   void slotMacInputMatchesLiteralVector() {
     assertArrayEquals(
         HEX.parseHex(

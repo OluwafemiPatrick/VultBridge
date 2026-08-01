@@ -35,6 +35,7 @@ dependencies {
     errorprone("com.google.errorprone:error_prone_core:2.49.0")
 
     implementation("org.bouncycastle:bcprov-jdk18on:1.84")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.22.0")
 
     testImplementation(platform("org.junit:junit-bom:5.14.3"))
     testImplementation("org.hamcrest:hamcrest:2.2")

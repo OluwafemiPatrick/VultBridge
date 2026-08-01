@@ -53,5 +53,7 @@ class VaultFormatTest {
     assertEquals(4 * 1024 * 1024, VaultFormat.FILE_CHUNK_PLAINTEXT_BYTES);
     assertEquals(16 * 1024 * 1024, VaultFormat.MAXIMUM_MANIFEST_PLAINTEXT_BYTES);
     assertEquals(64 * 1024, VaultFormat.MAXIMUM_COMMIT_PLAINTEXT_BYTES);
+    assertEquals(1024, VaultFormat.MAXIMUM_DISPLAY_NAME_UTF8_BYTES);
+    assertEquals(1, VaultFormat.RECORD_SCHEMA_VERSION);
   }
 }
