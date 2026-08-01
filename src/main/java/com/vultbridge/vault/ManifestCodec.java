@@ -101,8 +101,13 @@ public final class ManifestCodec {
       }
       // This comparison rejects indefinite arrays, wider-than-minimal integers, tags, and any
       // other alternate byte representation while leaving structural parsing to Jackson.
-      if (!Arrays.equals(plaintext, encode(manifest))) {
-        throw new VaultDataException();
+      byte[] canonical = encode(manifest);
+      try {
+        if (!Arrays.equals(plaintext, canonical)) {
+          throw new VaultDataException();
+        }
+      } finally {
+        Arrays.fill(canonical, (byte) 0);
       }
       return manifest;
     } catch (VaultDataException exception) {

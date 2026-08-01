@@ -65,8 +65,13 @@ public final class CommitCodec {
       } catch (IllegalArgumentException exception) {
         throw new VaultDataException();
       }
-      if (!Arrays.equals(plaintext, encode(commit))) {
-        throw new VaultDataException();
+      byte[] canonical = encode(commit);
+      try {
+        if (!Arrays.equals(plaintext, canonical)) {
+          throw new VaultDataException();
+        }
+      } finally {
+        Arrays.fill(canonical, (byte) 0);
       }
       return commit;
     } catch (VaultDataException exception) {

@@ -48,7 +48,7 @@ public final class VaultCreator {
       throws VaultAlreadyOpenException, VaultAccessException, UnableToUnlockVaultException {
     Objects.requireNonNull(vaultPath, "vaultPath");
     Objects.requireNonNull(passphrase, "passphrase");
-    VaultPathPolicy.requireV1VaultFile(vaultPath);
+    String vaultDisplayName = VaultPathPolicy.requireV1VaultFile(vaultPath);
     if (Files.exists(vaultPath, LinkOption.NOFOLLOW_LINKS)) {
       throw new VaultAccessException();
     }
@@ -68,7 +68,7 @@ public final class VaultCreator {
               StandardOpenOption.WRITE,
               LinkOption.NOFOLLOW_LINKS);
       writeInitialState(channel, passphrase);
-      VaultSession session = VaultUnlocker.openHeld(channel, sidecar, passphrase);
+      VaultSession session = VaultUnlocker.openHeld(channel, sidecar, passphrase, vaultDisplayName);
       transferred = true;
       return session;
     } catch (IOException | RuntimeException exception) {
@@ -167,7 +167,13 @@ public final class VaultCreator {
     long committedEnd = commitOffset + VaultFormat.RECORD_FRAME_HEADER_BYTES + 16L;
     for (int attempt = 0; attempt < 16; attempt++) {
       var candidate = new VaultCommit(manifestRef, committedEnd, 0, 0);
-      int encryptedLength = CommitCodec.encode(candidate).length + VaultFormat.AEAD_TAG_BYTES;
+      byte[] encoded = CommitCodec.encode(candidate);
+      int encryptedLength;
+      try {
+        encryptedLength = Math.addExact(encoded.length, VaultFormat.AEAD_TAG_BYTES);
+      } finally {
+        java.util.Arrays.fill(encoded, (byte) 0);
+      }
       long nextEnd =
           Math.addExact(
               Math.addExact(commitOffset, VaultFormat.RECORD_FRAME_HEADER_BYTES), encryptedLength);

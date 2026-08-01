@@ -1,4 +1,4 @@
-package com.vultbridge.ui;
+package com.vultbridge.service;
 
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -9,10 +9,11 @@ import java.util.function.IntSupplier;
 import java.util.regex.Pattern;
 
 /**
- * Produces the human-readable timestamped filename required by Compact &amp; Replace.
+ * Produces the timestamped filename required by the Compact &amp; Replace service contract.
  *
  * <p>Dependencies on time and randomness are supplied as arguments, making naming deterministic in
  * tests. A prior compaction suffix is removed so repeated compactions do not grow the base name.
+ * This class selects a filename only; it does not create, overwrite, move, or delete a path.
  */
 public final class CompactionNameGenerator {
   private static final Pattern PRIOR_COMPACTION_SUFFIX =

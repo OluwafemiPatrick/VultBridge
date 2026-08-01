@@ -1,6 +1,9 @@
 package com.vultbridge.ui;
 
+import com.vultbridge.service.VaultSnapshot;
 import com.vultbridge.vault.VaultFormat;
+import com.vultbridge.vault.VaultManifest;
+import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -63,6 +66,35 @@ public record UnlockedVaultState(
   /** Creates a validated empty-vault snapshot with no selected item. */
   public static UnlockedVaultState empty(String vaultDisplayName, long physicalVaultBytes) {
     return new UnlockedVaultState(vaultDisplayName, List.of(), 0, physicalVaultBytes, null);
+  }
+
+  /** Maps an authenticated manifest into a selection-free metadata-only UI snapshot. */
+  public static UnlockedVaultState fromManifest(
+      String vaultDisplayName, VaultManifest manifest, long physicalVaultBytes) {
+    Objects.requireNonNull(manifest, "manifest");
+    var items = new java.util.ArrayList<VaultItemViewModel>(manifest.fileCount());
+    for (int index = 0; index < manifest.entries().size(); index++) {
+      var entry = manifest.entries().get(index);
+      // Include manifest position so two valid names referencing the same FILE record still receive
+      // distinct UI identities. Selection is cleared whenever metadata is replaced.
+      ByteBuffer identity = ByteBuffer.allocate(VaultFormat.RECORD_ID_BYTES + Integer.BYTES);
+      identity.put(entry.fileRef().recordId().bytes()).putInt(index);
+      items.add(
+          new VaultItemViewModel(
+              UUID.nameUUIDFromBytes(identity.array()),
+              entry.displayName(),
+              entry.logicalSize(),
+              entry.importedAtUtc()));
+    }
+    return new UnlockedVaultState(
+        vaultDisplayName, items, manifest.liveLogicalFileBytes(), physicalVaultBytes, null);
+  }
+
+  /** Maps one service-produced authenticated metadata snapshot into UI state. */
+  public static UnlockedVaultState fromSnapshot(VaultSnapshot snapshot) {
+    Objects.requireNonNull(snapshot, "snapshot");
+    return fromManifest(
+        snapshot.vaultDisplayName(), snapshot.manifest(), snapshot.physicalVaultBytes());
   }
 
   /** Resolves the selected identifier to its item, or returns empty when nothing is selected. */

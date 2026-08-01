@@ -1,10 +1,13 @@
 package com.vultbridge.ui;
 
+import com.vultbridge.crypto.PassphraseEncoding;
 import com.vultbridge.crypto.PassphraseRules;
+import com.vultbridge.crypto.SensitiveBytes;
 import com.vultbridge.platform.FileDialogService;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.function.BiConsumer;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
@@ -16,24 +19,29 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
 /**
- * Presents the Phase 1 vault-open form and validates its user input.
+ * Presents the vault-open form and transfers validated input to the application controller.
  *
- * <p>Path selection does not read the selected vault. Until the encrypted vault engine exists, a
- * valid submission produces an explanatory message instead of entering an artificial unlocked
- * state. Temporary passphrase arrays are overwritten after validation.
+ * <p>Path selection does not read the selected vault. Valid input is encoded into a short-lived
+ * owned buffer for the background service, while temporary character arrays and the visible
+ * password control are cleared on every path.
  */
 public final class OpenVaultView extends VBox implements SensitiveView {
   private final PasswordField passphraseField = new PasswordField();
   private final Label message = new Label();
   private final Runnable cancelAction;
   private final FileDialogService fileDialogs;
+  private final BiConsumer<Path, SensitiveBytes> openAction;
   private final TextField pathField = new TextField("Choose an existing .vltb file");
   private Path selectedPath;
 
   /** Creates the form using an injected path chooser and navigation cancellation action. */
-  public OpenVaultView(FileDialogService fileDialogs, Runnable cancelAction) {
+  public OpenVaultView(
+      FileDialogService fileDialogs,
+      Runnable cancelAction,
+      BiConsumer<Path, SensitiveBytes> openAction) {
     this.fileDialogs = Objects.requireNonNull(fileDialogs, "fileDialogs");
     this.cancelAction = Objects.requireNonNull(cancelAction, "cancelAction");
+    this.openAction = Objects.requireNonNull(openAction, "openAction");
     setId("open-vault-view");
     getStyleClass().addAll("content-view", "form-view", "compact-form-view");
     setPadding(new Insets(42, 72, 36, 72));
@@ -105,8 +113,16 @@ public final class OpenVaultView extends VBox implements SensitiveView {
         showError("Only printable ASCII characters are accepted.");
       } else {
         message.getStyleClass().remove("error-message");
-        message.setText(
-            "Vault unlocking will be enabled when the encrypted vault engine is ready.");
+        SensitiveBytes encoded = PassphraseEncoding.encode(passphrase);
+        boolean transferred = false;
+        try {
+          openAction.accept(selectedPath, encoded);
+          transferred = true;
+        } finally {
+          if (!transferred) {
+            encoded.close();
+          }
+        }
       }
     } finally {
       Arrays.fill(passphrase, '\0');

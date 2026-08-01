@@ -1,4 +1,4 @@
-package com.vultbridge.ui;
+package com.vultbridge.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
+/** Verifies the exact Compact &amp; Replace filename policy at the service boundary. */
 class CompactionNameGeneratorTest {
   private static final Instant TIMESTAMP = Instant.parse("2026-08-01T10:45:30Z");
 

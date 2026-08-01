@@ -64,8 +64,17 @@ public final class HeaderSlotAuthenticator {
     return List.copyOf(authenticated);
   }
 
-  private static java.util.Optional<AuthenticatedHeaderSlot> verifySlot(
+  /**
+   * Verifies one slot tag and promotes it to authenticated state when the tag is valid.
+   *
+   * <p>This is used after a newly written mutation slot has been forced; callers must not update
+   * session state before durable installation has succeeded.
+   */
+  public static java.util.Optional<AuthenticatedHeaderSlot> verifySlot(
       UnverifiedHeaderSlot slot, byte[] vaultId, SensitiveBytes headerMacKey) {
+    Objects.requireNonNull(slot, "slot");
+    Objects.requireNonNull(vaultId, "vaultId");
+    Objects.requireNonNull(headerMacKey, "headerMacKey");
     byte[] input =
         VaultEncoding.slotMacInput(
             vaultId,

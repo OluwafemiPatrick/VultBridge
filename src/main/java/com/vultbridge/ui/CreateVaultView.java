@@ -1,10 +1,13 @@
 package com.vultbridge.ui;
 
+import com.vultbridge.crypto.PassphraseEncoding;
 import com.vultbridge.crypto.PassphraseRules;
+import com.vultbridge.crypto.SensitiveBytes;
 import com.vultbridge.platform.FileDialogService;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.function.BiConsumer;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
@@ -18,11 +21,11 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
 /**
- * Presents the Phase 1 vault-creation form and validates its user input.
+ * Presents the vault-creation form and transfers validated input to the application controller.
  *
- * <p>The view selects a destination path without touching the filesystem. Until the encrypted vault
- * engine exists, valid submission produces an explanatory message rather than a placeholder file.
- * Temporary passphrase arrays are overwritten after validation.
+ * <p>The view selects a destination path without touching the filesystem. Valid input is encoded
+ * into a short-lived owned buffer for the background service, while temporary character arrays and
+ * visible password controls are cleared on every path.
  */
 public final class CreateVaultView extends VBox implements SensitiveView {
   private final PasswordField passphraseField = new PasswordField();
@@ -32,13 +35,18 @@ public final class CreateVaultView extends VBox implements SensitiveView {
   private final Label message = new Label();
   private final Runnable cancelAction;
   private final FileDialogService fileDialogs;
+  private final BiConsumer<Path, SensitiveBytes> createAction;
   private final TextField pathField = new TextField("Choose a new .vltb file");
   private Path selectedPath;
 
   /** Creates the form using an injected path chooser and navigation cancellation action. */
-  public CreateVaultView(FileDialogService fileDialogs, Runnable cancelAction) {
+  public CreateVaultView(
+      FileDialogService fileDialogs,
+      Runnable cancelAction,
+      BiConsumer<Path, SensitiveBytes> createAction) {
     this.fileDialogs = Objects.requireNonNull(fileDialogs, "fileDialogs");
     this.cancelAction = Objects.requireNonNull(cancelAction, "cancelAction");
+    this.createAction = Objects.requireNonNull(createAction, "createAction");
     setId("create-vault-view");
     getStyleClass().addAll("content-view", "form-view");
     setPadding(new Insets(24, 48, 28, 48));
@@ -134,7 +142,16 @@ public final class CreateVaultView extends VBox implements SensitiveView {
         showError("Acknowledge that the passphrase cannot be recovered.");
       } else {
         message.getStyleClass().remove("error-message");
-        message.setText("Vault creation will be enabled when the encrypted vault engine is ready.");
+        SensitiveBytes encoded = PassphraseEncoding.encode(passphrase);
+        boolean transferred = false;
+        try {
+          createAction.accept(selectedPath, encoded);
+          transferred = true;
+        } finally {
+          if (!transferred) {
+            encoded.close();
+          }
+        }
       }
     } finally {
       Arrays.fill(passphrase, '\0');

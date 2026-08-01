@@ -98,16 +98,6 @@ class AppStateMachineTest {
   }
 
   @Test
-  void replacingMetadataClearsSelection() {
-    var stateMachine = unlockedStateMachine();
-    stateMachine.selectItem(ITEM_ID);
-
-    stateMachine.replaceVaultMetadata(populatedVaultState().select(ITEM_ID));
-
-    assertFalse(stateMachine.state().unlockedVault().orElseThrow().hasSelection());
-  }
-
-  @Test
   void busyStateDisablesUnlockedActionsWithoutDiscardingMetadata() {
     var stateMachine = unlockedStateMachine();
     stateMachine.selectItem(ITEM_ID);
@@ -118,8 +108,22 @@ class AppStateMachineTest {
     assertFalse(stateMachine.state().canExport());
     assertFalse(stateMachine.state().canDelete());
     assertFalse(stateMachine.state().canCompact());
-    assertFalse(stateMachine.state().canLock());
+    assertTrue(stateMachine.state().canLock());
     assertTrue(stateMachine.state().unlockedVault().isPresent());
+  }
+
+  @Test
+  void completedVaultOperationRefreshesMetadataAndClearsSelection() {
+    var stateMachine = unlockedStateMachine();
+    stateMachine.selectItem(ITEM_ID);
+    stateMachine.beginOperation();
+
+    var refreshed = UnlockedVaultState.empty("MyVault", 900);
+    stateMachine.completeVaultOperation(refreshed);
+
+    assertEquals(JobState.IDLE, stateMachine.state().jobState());
+    assertEquals(900, stateMachine.state().unlockedVault().orElseThrow().physicalVaultBytes());
+    assertFalse(stateMachine.state().unlockedVault().orElseThrow().hasSelection());
   }
 
   @Test

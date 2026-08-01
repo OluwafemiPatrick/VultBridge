@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -26,6 +27,7 @@ public final class BackgroundJobManager implements AutoCloseable {
   private final UiDispatcher uiDispatcher;
   private final ThreadPoolExecutor executor;
   private JobControl activeJob;
+  private Runnable shutdownCleanup;
   private boolean closed;
 
   /** Creates a manager whose notifications are delivered by the supplied UI dispatcher. */
@@ -42,7 +44,10 @@ public final class BackgroundJobManager implements AutoCloseable {
             new ArrayBlockingQueue<>(1),
             runnable -> {
               var thread = new Thread(runnable, "vultbridge-background-job");
-              thread.setDaemon(false);
+              // A provider or removed device can make a Java I/O call ignore interruption. A
+              // daemon worker prevents that platform failure from keeping the process alive; the
+              // serialized shutdown cleanup still runs if the call eventually returns.
+              thread.setDaemon(true);
               return thread;
             },
             new ThreadPoolExecutor.AbortPolicy());
@@ -95,7 +100,7 @@ public final class BackgroundJobManager implements AutoCloseable {
   // Closes the manager using the default bounded shutdown timeout.
   @Override
   public void close() {
-    close(DEFAULT_SHUTDOWN_TIMEOUT);
+    close(DEFAULT_SHUTDOWN_TIMEOUT, () -> {});
   }
 
   /**
@@ -105,31 +110,64 @@ public final class BackgroundJobManager implements AutoCloseable {
    * final bounded wait. The method is idempotent.
    */
   public void close(Duration timeout) {
+    close(timeout, () -> {});
+  }
+
+  /**
+   * Closes the manager and runs sensitive-resource cleanup only after active worker use ends.
+   *
+   * <p>If no operation is active, cleanup runs on the caller before this method returns. Otherwise
+   * it runs on the worker's terminal path, including after an interrupt fallback. This ordering
+   * prevents callers from closing channels, keys, or locks concurrently with vault work. Cleanup
+   * must be idempotent, non-blocking, and safe to call without exposing exception details.
+   */
+  public void close(Duration timeout, Runnable cleanup) {
     Objects.requireNonNull(timeout, "timeout");
+    Objects.requireNonNull(cleanup, "cleanup");
     if (timeout.isNegative()) {
       throw new IllegalArgumentException("Shutdown timeout must not be negative");
     }
 
+    Runnable immediateCleanup = null;
     synchronized (lifecycleLock) {
       if (closed) {
         return;
       }
       closed = true;
+      shutdownCleanup = cleanup;
       if (activeJob != null) {
         activeJob.requestCancellation();
+      } else {
+        immediateCleanup = takeShutdownCleanup();
       }
       executor.shutdown();
     }
+    runCleanup(immediateCleanup);
 
     // Wait outside lifecycleLock so the worker can acquire it while recording completion.
     try {
       if (!executor.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
-        executor.shutdownNow();
+        finishNeverStartedJob(executor.shutdownNow());
         executor.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS);
       }
     } catch (InterruptedException exception) {
-      executor.shutdownNow();
+      finishNeverStartedJob(executor.shutdownNow());
       Thread.currentThread().interrupt();
+    }
+  }
+
+  private void finishNeverStartedJob(java.util.List<Runnable> abandonedTasks) {
+    if (abandonedTasks.isEmpty()) {
+      return;
+    }
+    JobControl abandoned;
+    synchronized (lifecycleLock) {
+      abandoned = activeJob;
+    }
+    if (abandoned != null) {
+      // shutdownNow returns queued work that can no longer reach executeJob's terminal path. Since
+      // the sole task never used vault resources, the close caller may safely complete ownership.
+      finish(abandoned);
     }
   }
 
@@ -139,13 +177,14 @@ public final class BackgroundJobManager implements AutoCloseable {
         new JobContext(
             control,
             progress -> uiDispatcher.dispatch(() -> callbacks.progressed().accept(progress)));
-    // Check both before and after user job code so a late cancellation cannot report success.
+    // The manager checks admission-time cancellation. Each operation owns later checkpoints because
+    // only it knows whether cancellation is still safe; an unconditional post-job check could
+    // falsely report cancellation after a mutation's authenticated slot was durably installed.
     try {
       context.checkpoint();
       T result = job.execute(context);
-      context.checkpoint();
       completion = () -> callbacks.succeeded().accept(result);
-    } catch (JobCancelledException exception) {
+    } catch (JobCancelledException | CancellationException exception) {
       completion = callbacks.cancelled();
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
@@ -165,16 +204,38 @@ public final class BackgroundJobManager implements AutoCloseable {
   }
 
   private void finish(JobControl control) {
+    Runnable cleanup = null;
     synchronized (lifecycleLock) {
       if (activeJob == control) {
         activeJob = null;
       }
       control.markFinished();
+      if (closed) {
+        cleanup = takeShutdownCleanup();
+      }
+    }
+    // Cleanup is intentionally outside the lock and before the terminal UI callback. A late
+    // create/open result therefore cannot retain a session beyond application shutdown.
+    runCleanup(cleanup);
+  }
+
+  private Runnable takeShutdownCleanup() {
+    Runnable cleanup = shutdownCleanup;
+    shutdownCleanup = null;
+    return cleanup;
+  }
+
+  private static void runCleanup(Runnable cleanup) {
+    if (cleanup != null) {
+      cleanup.run();
     }
   }
 
   private static JobFailureCategory categorize(Exception exception) {
     // Keep this mapping intentionally coarse; exception messages never cross into the UI layer.
+    if (exception instanceof VaultOperationException operationException) {
+      return operationException.category();
+    }
     if (exception instanceof IllegalArgumentException) {
       return JobFailureCategory.INPUT_REJECTED;
     }

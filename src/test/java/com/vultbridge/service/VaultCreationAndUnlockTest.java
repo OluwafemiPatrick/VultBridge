@@ -210,6 +210,7 @@ class VaultCreationAndUnlockTest {
     try (var passphrase = passphrase();
         var session = VaultCreator.create(vault, passphrase)) {
       assertEquals(0, session.manifest().fileCount());
+      assertEquals("process-lock.vltb", session.vaultDisplayName());
       Process process =
           new ProcessBuilder(
                   Path.of(System.getProperty("java.home"), "bin", "java").toString(),

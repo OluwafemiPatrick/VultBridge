@@ -83,7 +83,8 @@ spotless {
         endWithNewline()
     }
     format("misc") {
-        target("*.md", ".gitignore", ".gitattributes", "*.properties")
+        // Private root notes are intentionally ignored and must not influence the public build.
+        target("README.md", ".gitignore", ".gitattributes", "*.properties")
         trimTrailingWhitespace()
         endWithNewline()
     }

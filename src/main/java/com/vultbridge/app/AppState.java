@@ -68,9 +68,9 @@ public record AppState(
     return isIdleUnlocked() && unlockedVault.orElseThrow().hasFiles();
   }
 
-  /** Returns whether the unlocked vault can be locked without conflicting with active work. */
+  /** Returns whether Lock can close an idle vault or cancel and close an active operation. */
   public boolean canLock() {
-    return isIdleUnlocked();
+    return sessionState == VaultSessionState.UNLOCKED;
   }
 
   private boolean isIdleUnlocked() {

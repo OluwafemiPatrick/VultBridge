@@ -26,7 +26,22 @@ public final class ChaCha20Poly1305 {
   public static byte[] encrypt(
       SensitiveBytes key, byte[] nonce, byte[] plaintext, byte[] associatedData) {
     validateInputs(key, nonce, plaintext, associatedData);
-    return process(Cipher.ENCRYPT_MODE, key, nonce, plaintext, associatedData);
+    return process(Cipher.ENCRYPT_MODE, key, nonce, plaintext, 0, plaintext.length, associatedData);
+  }
+
+  /** Encrypts only the specified prefix of a caller-owned plaintext buffer. */
+  public static byte[] encryptPrefix(
+      SensitiveBytes key,
+      byte[] nonce,
+      byte[] plaintextBuffer,
+      int plaintextLength,
+      byte[] associatedData) {
+    validateInputs(key, nonce, plaintextBuffer, associatedData);
+    if (plaintextLength < 0 || plaintextLength > plaintextBuffer.length) {
+      throw new IllegalArgumentException("Plaintext prefix length is outside the buffer");
+    }
+    return process(
+        Cipher.ENCRYPT_MODE, key, nonce, plaintextBuffer, 0, plaintextLength, associatedData);
   }
 
   /**
@@ -44,7 +59,9 @@ public final class ChaCha20Poly1305 {
 
     byte[] plaintext;
     try {
-      plaintext = process(Cipher.DECRYPT_MODE, key, nonce, ciphertext, associatedData);
+      plaintext =
+          process(
+              Cipher.DECRYPT_MODE, key, nonce, ciphertext, 0, ciphertext.length, associatedData);
     } catch (AuthenticationFailure failure) {
       throw new AuthenticationFailedException();
     }
@@ -56,12 +73,18 @@ public final class ChaCha20Poly1305 {
   }
 
   private static byte[] process(
-      int mode, SensitiveBytes key, byte[] nonce, byte[] input, byte[] associatedData) {
+      int mode,
+      SensitiveBytes key,
+      byte[] nonce,
+      byte[] input,
+      int inputOffset,
+      int inputLength,
+      byte[] associatedData) {
     try {
       Cipher cipher = Cipher.getInstance(TRANSFORMATION);
       cipher.init(mode, new SecretKeySpec(key.borrow(), KEY_ALGORITHM), new IvParameterSpec(nonce));
       cipher.updateAAD(associatedData);
-      return cipher.doFinal(input);
+      return cipher.doFinal(input, inputOffset, inputLength);
     } catch (AEADBadTagException exception) {
       throw new AuthenticationFailure(exception);
     } catch (GeneralSecurityException exception) {

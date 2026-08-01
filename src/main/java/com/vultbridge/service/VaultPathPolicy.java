@@ -16,8 +16,8 @@ final class VaultPathPolicy {
 
   private VaultPathPolicy() {}
 
-  /** Rejects a path whose final filename is not a canonical v1 vault name. */
-  static void requireV1VaultFile(Path vaultPath) throws VaultAccessException {
+  /** Returns the validated final filename or rejects a noncanonical v1 vault path. */
+  static String requireV1VaultFile(Path vaultPath) throws VaultAccessException {
     Path fileName = vaultPath.getFileName();
     if (fileName == null) {
       throw new VaultAccessException();
@@ -26,5 +26,6 @@ final class VaultPathPolicy {
     if (value.length() <= EXTENSION.length() || !value.endsWith(EXTENSION)) {
       throw new VaultAccessException();
     }
+    return value;
   }
 }

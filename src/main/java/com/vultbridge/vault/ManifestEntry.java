@@ -19,7 +19,7 @@ public record ManifestEntry(
     long chunkCount,
     Instant importedAtUtc) {
   public ManifestEntry {
-    validateDisplayName(displayName);
+    requireValidDisplayName(displayName);
     Objects.requireNonNull(fileRef, "fileRef");
     Objects.requireNonNull(importedAtUtc, "importedAtUtc");
     try {
@@ -39,7 +39,8 @@ public record ManifestEntry(
     }
   }
 
-  private static void validateDisplayName(String displayName) {
+  /** Validates one prospective display name against the exact v1 manifest policy. */
+  public static void requireValidDisplayName(String displayName) {
     Objects.requireNonNull(displayName, "displayName");
     if (displayName.isEmpty()
         || displayName.equals(".")

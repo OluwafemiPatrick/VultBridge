@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
@@ -126,6 +127,39 @@ class BackgroundJobManagerTest {
   }
 
   @Test
+  void preservesExplicitSanitizedVaultOperationCategory() throws InterruptedException {
+    var completed = new CountDownLatch(1);
+    var failure = new AtomicReference<JobFailureCategory>();
+    try (var manager = new BackgroundJobManager(Runnable::run)) {
+      manager.submit(
+          context -> {
+            throw new VaultOperationException(JobFailureCategory.SECURITY);
+          },
+          new JobCallbacks<>(
+              ignored -> completed.countDown(),
+              ignored -> {},
+              category -> {
+                failure.set(category);
+                completed.countDown();
+              },
+              completed::countDown));
+
+      assertTrue(completed.await(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS));
+      assertEquals(JobFailureCategory.SECURITY, failure.get());
+    }
+  }
+
+  @Test
+  void sanitizedVaultOperationFailureRetainsNoSensitiveDetail() {
+    var failure = new VaultOperationException(JobFailureCategory.FILESYSTEM);
+
+    assertEquals(JobFailureCategory.FILESYSTEM, failure.category());
+    assertEquals(null, failure.getMessage());
+    assertEquals(null, failure.getCause());
+    assertEquals(0, failure.getStackTrace().length);
+  }
+
+  @Test
   void closeRequestsCancellationAndRejectsNewWork() throws InterruptedException {
     var started = new CountDownLatch(1);
     var cancelled = new CountDownLatch(1);
@@ -148,6 +182,69 @@ class BackgroundJobManagerTest {
     assertThrows(
         IllegalStateException.class,
         () -> manager.submit(context -> "late", callbacks(new CountDownLatch(1))));
+  }
+
+  @Test
+  void shutdownCleanupRunsAfterCooperativeWorkerUseEnds() throws InterruptedException {
+    var started = new CountDownLatch(1);
+    var cleanup = new CountDownLatch(1);
+    var sessionInUse = new AtomicBoolean(true);
+    var manager = new BackgroundJobManager(Runnable::run);
+    manager.submit(
+        context -> {
+          started.countDown();
+          try {
+            while (true) {
+              context.checkpoint();
+              Thread.onSpinWait();
+            }
+          } finally {
+            sessionInUse.set(false);
+          }
+        },
+        new JobCallbacks<>(ignored -> {}, ignored -> {}, ignored -> {}, () -> {}));
+
+    assertTrue(started.await(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS));
+    manager.close(
+        TEST_TIMEOUT,
+        () -> {
+          assertFalse(sessionInUse.get());
+          cleanup.countDown();
+        });
+
+    assertTrue(cleanup.await(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS));
+  }
+
+  @Test
+  void timedOutShutdownDefersCleanupAndUsesADaemonWorker() throws InterruptedException {
+    var started = new CountDownLatch(1);
+    var release = new CountDownLatch(1);
+    var cleanup = new CountDownLatch(1);
+    var daemon = new AtomicBoolean();
+    var manager = new BackgroundJobManager(Runnable::run);
+    manager.submit(
+        context -> {
+          daemon.set(Thread.currentThread().isDaemon());
+          started.countDown();
+          boolean released = false;
+          while (!released) {
+            try {
+              released = release.await(10, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException ignored) {
+              // Model an OS/provider call that does not terminate when Java interrupts it.
+            }
+          }
+          return null;
+        },
+        new JobCallbacks<>(ignored -> {}, ignored -> {}, ignored -> {}, () -> {}));
+
+    assertTrue(started.await(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS));
+    manager.close(Duration.ZERO, cleanup::countDown);
+
+    assertTrue(daemon.get());
+    assertEquals(1, cleanup.getCount());
+    release.countDown();
+    assertTrue(cleanup.await(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS));
   }
 
   private static JobCallbacks<String> callbacks(CountDownLatch completed) {

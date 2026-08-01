@@ -62,6 +62,37 @@ public final class RecordCrypto {
         VaultEncoding.fileChunkNonce(chunkIndex));
   }
 
+  /** Encrypts one exact FILE chunk from the prefix of a reusable plaintext buffer. */
+  public static byte[] encryptFileChunkPrefix(
+      VaultKeySet keys,
+      RecordId recordId,
+      FileRecordLayout layout,
+      long chunkIndex,
+      byte[] plaintextBuffer,
+      int plaintextLength) {
+    Objects.requireNonNull(layout, "layout");
+    Objects.requireNonNull(plaintextBuffer, "plaintextBuffer");
+    if (plaintextLength != layout.chunkPlaintextLength(chunkIndex)
+        || plaintextLength > plaintextBuffer.length) {
+      throw new IllegalArgumentException("FILE chunk plaintext length is inconsistent");
+    }
+    Objects.requireNonNull(keys, "keys");
+    Objects.requireNonNull(recordId, "recordId");
+    byte[] vaultId = keys.vaultId();
+    byte[] aad =
+        VaultEncoding.recordAssociatedData(
+            vaultId, recordId.bytes(), RecordRole.FILE.code(), chunkIndex, plaintextLength);
+    try (var masterKey = keys.copyMasterVaultKey();
+        var recordKey = V1KeyDerivation.deriveRecordKey(masterKey, vaultId, recordId.bytes())) {
+      return ChaCha20Poly1305.encryptPrefix(
+          recordKey,
+          VaultEncoding.fileChunkNonce(chunkIndex),
+          plaintextBuffer,
+          plaintextLength,
+          aad);
+    }
+  }
+
   /** Authenticates and decrypts one exact FILE chunk into an owned plaintext buffer. */
   public static SensitiveBytes decryptFileChunk(
       VaultKeySet keys,

@@ -50,7 +50,7 @@ public final class VaultUnlocker {
       throws VaultAlreadyOpenException, VaultAccessException, UnableToUnlockVaultException {
     Objects.requireNonNull(vaultPath, "vaultPath");
     Objects.requireNonNull(passphrase, "passphrase");
-    VaultPathPolicy.requireV1VaultFile(vaultPath);
+    String vaultDisplayName = VaultPathPolicy.requireV1VaultFile(vaultPath);
     VaultSidecarLock sidecar = VaultSidecarLock.acquire(vaultPath);
     FileChannel channel = null;
     boolean transferred = false;
@@ -66,7 +66,7 @@ public final class VaultUnlocker {
               StandardOpenOption.READ,
               StandardOpenOption.WRITE,
               LinkOption.NOFOLLOW_LINKS);
-      VaultSession session = openHeld(channel, sidecar, passphrase);
+      VaultSession session = openHeld(channel, sidecar, passphrase, vaultDisplayName);
       transferred = true;
       return session;
     } catch (IOException | SecurityException exception) {
@@ -80,7 +80,10 @@ public final class VaultUnlocker {
   }
 
   static VaultSession openHeld(
-      FileChannel channel, VaultSidecarLock sidecar, SensitiveBytes passphrase)
+      FileChannel channel,
+      VaultSidecarLock sidecar,
+      SensitiveBytes passphrase,
+      String vaultDisplayName)
       throws VaultAccessException, UnableToUnlockVaultException {
     VaultKeySet keys = null;
     boolean transferred = false;
@@ -90,7 +93,8 @@ public final class VaultUnlocker {
       for (AuthenticatedHeaderSlot slot : HeaderSlotAuthenticator.verifyAndOrder(header, keys)) {
         try {
           VaultManifest manifest = readCandidate(channel, keys, slot);
-          VaultSession session = new VaultSession(channel, sidecar, keys, manifest, slot);
+          VaultSession session =
+              new VaultSession(channel, sidecar, keys, manifest, slot, vaultDisplayName);
           transferred = true;
           return session;
         } catch (VaultDataException ignored) {

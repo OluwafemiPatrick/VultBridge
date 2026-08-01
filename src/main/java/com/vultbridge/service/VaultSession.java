@@ -19,10 +19,11 @@ import java.util.Objects;
  */
 public final class VaultSession implements AutoCloseable {
   private final FileChannel channel;
+  private final String vaultDisplayName;
   private final VaultSidecarLock sidecarLock;
   private final VaultKeySet keys;
   private final RecordIdGenerator recordIds;
-  private final AuthenticatedHeaderSlot activeSlot;
+  private AuthenticatedHeaderSlot activeSlot;
   private VaultManifest manifest;
   private boolean closed;
 
@@ -31,12 +32,17 @@ public final class VaultSession implements AutoCloseable {
       VaultSidecarLock sidecarLock,
       VaultKeySet keys,
       VaultManifest manifest,
-      AuthenticatedHeaderSlot activeSlot) {
+      AuthenticatedHeaderSlot activeSlot,
+      String vaultDisplayName) {
     this.channel = Objects.requireNonNull(channel, "channel");
     this.sidecarLock = Objects.requireNonNull(sidecarLock, "sidecarLock");
     this.keys = Objects.requireNonNull(keys, "keys");
     this.manifest = Objects.requireNonNull(manifest, "manifest");
     this.activeSlot = Objects.requireNonNull(activeSlot, "activeSlot");
+    this.vaultDisplayName = Objects.requireNonNull(vaultDisplayName, "vaultDisplayName");
+    if (vaultDisplayName.isBlank()) {
+      throw new IllegalArgumentException("Vault display name must not be blank");
+    }
     recordIds = new RecordIdGenerator();
   }
 
@@ -44,6 +50,22 @@ public final class VaultSession implements AutoCloseable {
   public VaultManifest manifest() {
     ensureOpen();
     return manifest;
+  }
+
+  /** Returns only the final vault filename, never its complete host path. */
+  public String vaultDisplayName() {
+    ensureOpen();
+    return vaultDisplayName;
+  }
+
+  /** Returns a fresh authenticated metadata snapshot including the current physical file size. */
+  public VaultSnapshot snapshot() throws VaultOperationException {
+    ensureOpen();
+    try {
+      return new VaultSnapshot(vaultDisplayName, manifest, channel.size());
+    } catch (IOException exception) {
+      throw new VaultOperationException(JobFailureCategory.FILESYSTEM);
+    }
   }
 
   /** Returns whether all owned session resources have been released. */
@@ -69,6 +91,34 @@ public final class VaultSession implements AutoCloseable {
   AuthenticatedHeaderSlot activeSlot() {
     ensureOpen();
     return activeSlot;
+  }
+
+  long authenticatedCommitEnd() {
+    ensureOpen();
+    return Math.addExact(
+        Math.addExact(
+            activeSlot.commitOffset(), com.vultbridge.vault.VaultFormat.RECORD_FRAME_HEADER_BYTES),
+        activeSlot.commitStoredLength());
+  }
+
+  /**
+   * Advances authenticated session state after the matching inactive slot has been forced.
+   *
+   * <p>This package-private transition is confined to the serialized vault worker. Both values are
+   * validated before either field changes, so rejected transitions retain the preceding in-memory
+   * state exactly as the on-disk two-slot protocol retains the preceding committed state.
+   */
+  void installCommittedState(VaultManifest nextManifest, AuthenticatedHeaderSlot nextActiveSlot) {
+    ensureOpen();
+    Objects.requireNonNull(nextManifest, "nextManifest");
+    Objects.requireNonNull(nextActiveSlot, "nextActiveSlot");
+    if (activeSlot.generation() == -1L
+        || nextActiveSlot.slotIndex() != 1 - activeSlot.slotIndex()
+        || nextActiveSlot.generation() != activeSlot.generation() + 1) {
+      throw new IllegalArgumentException("Session state must advance to the next inactive slot");
+    }
+    manifest = nextManifest;
+    activeSlot = nextActiveSlot;
   }
 
   @Override

@@ -8,6 +8,8 @@ package com.vultbridge.service;
  */
 public enum JobFailureCategory {
   INPUT_REJECTED,
+  VAULT_ALREADY_OPEN,
+  UNABLE_TO_UNLOCK,
   FILESYSTEM,
   SECURITY,
   INTERNAL

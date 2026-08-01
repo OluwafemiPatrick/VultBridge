@@ -8,10 +8,14 @@ no account system, server dependency, recovery key, or passphrase-recovery servi
 
 VultBridge is under active MVP development and is not ready for production use.
 
-The application shell, state model, background-job framework, v1 cryptographic format, record
-engine, manifest and commit codecs, sidecar locking, durable empty-vault creation, and authenticated
-unlock workflow are implemented. Phase 4 will connect persistence to streaming import, listing,
-logical deletion, and export. Those file operations are not yet available end to end.
+Phases 1–4 are implemented and have completed their quality and adversarial-review gates. The
+application supports the complete pre-compaction workflow end to end: create, authenticated unlock,
+regular-file import, persisted flat listing, logical deletion, explicit authenticated export, lock,
+reopen, and manual closed-vault backup. File content uses bounded streaming.
+
+The codebase is ready to begin Phase 5. Compact & Replace remains unavailable until its candidate
+creation, storage preflight, validation-before-removal, cancellation, and storage-failure behavior
+have been implemented and verified.
 
 ## MVP scope
 
@@ -62,6 +66,10 @@ vault copy is not detected, and deletion does not promise secure physical erasur
 - A failed creation may leave an incomplete `.vltb` file for manual removal. VultBridge does not
   automatically delete an uncertain pathname because Java cannot bind that deletion atomically to
   the file created by the failed operation.
+- Export writes owner-only plaintext to a random create-new temporary file beside the destination,
+  authenticates every vault chunk before writing it, forces and closes it, and publishes without
+  overwrite. Failed or cancelled exports remove their temporary output where its captured APFS
+  identity can still be established.
 
 ## Requirements
 
@@ -107,8 +115,8 @@ OWASP Dependency-Check downloads current vulnerability data and may require an N
 src/main/java/com/vultbridge/
   app/       application entry point and state transitions
   crypto/    passphrase handling, key hierarchy, and cryptographic primitives
-  platform/  file dialogs, filesystem policy, and sidecar locking
-  service/   background work, vault creation, sessions, and unlocking
+  platform/  file dialogs, filesystem policy, source inspection, export targets, and sidecar locking
+  service/   background work, sessions, creation/unlock, import, export, and logical deletion
   ui/        JavaFX screens, dialogs, and metadata-only view models
   vault/     v1 binary format, records, CBOR, commits, and durability protocol
 ```

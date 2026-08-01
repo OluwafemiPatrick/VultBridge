@@ -1,6 +1,7 @@
 package com.vultbridge.ui;
 
 import com.vultbridge.app.AppState;
+import com.vultbridge.app.JobState;
 import com.vultbridge.platform.FileDialogService;
 import com.vultbridge.vault.VaultFormat;
 import java.time.ZoneId;
@@ -9,6 +10,7 @@ import java.time.format.FormatStyle;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
@@ -40,6 +42,9 @@ public final class UnlockedVaultView extends BorderPane {
 
   private final FileDialogService fileDialogs;
   private final UnlockedVaultState vaultState;
+  private final Consumer<java.util.List<java.nio.file.Path>> importAction;
+  private final BiConsumer<String, java.nio.file.Path> exportAction;
+  private final Consumer<String> deleteAction;
   private final Label message = new Label();
 
   /** Creates the unlocked screen from one validated state snapshot and its UI actions. */
@@ -49,13 +54,19 @@ public final class UnlockedVaultView extends BorderPane {
       Consumer<UUID> selectItem,
       Runnable clearSelection,
       Runnable lockVault,
-      Consumer<UnlockedVaultState> showCompaction) {
+      Consumer<UnlockedVaultState> showCompaction,
+      Consumer<java.util.List<java.nio.file.Path>> importAction,
+      BiConsumer<String, java.nio.file.Path> exportAction,
+      Consumer<String> deleteAction) {
     Objects.requireNonNull(state, "state");
     this.fileDialogs = Objects.requireNonNull(fileDialogs, "fileDialogs");
     Objects.requireNonNull(selectItem, "selectItem");
     Objects.requireNonNull(clearSelection, "clearSelection");
     Objects.requireNonNull(lockVault, "lockVault");
     Objects.requireNonNull(showCompaction, "showCompaction");
+    this.importAction = Objects.requireNonNull(importAction, "importAction");
+    this.exportAction = Objects.requireNonNull(exportAction, "exportAction");
+    this.deleteAction = Objects.requireNonNull(deleteAction, "deleteAction");
     vaultState = state.unlockedVault().orElseThrow();
 
     setId("unlocked-vault-view");
@@ -63,7 +74,7 @@ public final class UnlockedVaultView extends BorderPane {
     setPadding(new Insets(14, 18, 14, 18));
 
     setTop(createTopSection(state, lockVault));
-    setCenter(createFileTable(selectItem, clearSelection));
+    setCenter(createFileTable(selectItem, clearSelection, state.jobState() == JobState.BUSY));
     setBottom(createActionBar(state, showCompaction));
   }
 
@@ -114,9 +125,10 @@ public final class UnlockedVaultView extends BorderPane {
   }
 
   private TableView<VaultItemViewModel> createFileTable(
-      Consumer<UUID> selectItem, Runnable clearSelection) {
+      Consumer<UUID> selectItem, Runnable clearSelection, boolean busy) {
     var table = new TableView<VaultItemViewModel>();
     table.setId("vault-file-table");
+    table.setDisable(busy);
     table.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
     table.setPlaceholder(
         new Label(
@@ -192,23 +204,19 @@ public final class UnlockedVaultView extends BorderPane {
   private void chooseImports() {
     var selected = fileDialogs.chooseImportFiles(getScene().getWindow());
     if (!selected.isEmpty()) {
-      message.setText(
-          selected.size()
-              + (selected.size() == 1 ? " file selected. " : " files selected. ")
-              + "Import will be enabled when the encrypted vault engine is ready.");
+      importAction.accept(selected);
     }
   }
 
   private void chooseExport() {
     vaultState
         .selectedItem()
-        .flatMap(
-            selected ->
-                fileDialogs.chooseExportDestination(getScene().getWindow(), selected.displayName()))
         .ifPresent(
-            ignored ->
-                message.setText(
-                    "Export will be enabled when the encrypted vault engine is ready."));
+            selected ->
+                fileDialogs
+                    .chooseExportDestination(getScene().getWindow(), selected.displayName())
+                    .ifPresent(
+                        destination -> exportAction.accept(selected.displayName(), destination)));
   }
 
   private void showDeleteConfirmation() {
@@ -220,9 +228,8 @@ public final class UnlockedVaultView extends BorderPane {
         "Deletion removes the item from the file list but does not immediately shrink the physical vault file.");
     var acknowledge = new ButtonType("Acknowledge", ButtonBar.ButtonData.OK_DONE);
     alert.getButtonTypes().setAll(ButtonType.CANCEL, acknowledge);
-    // Phase 1 confirms semantics but does not pretend that a manifest mutation occurred.
     if (alert.showAndWait().filter(acknowledge::equals).isPresent()) {
-      message.setText("Deletion will be enabled when the encrypted vault engine is ready.");
+      vaultState.selectedItem().ifPresent(selected -> deleteAction.accept(selected.displayName()));
     }
   }
 

@@ -99,10 +99,10 @@ public final class AppStateMachine {
     }
   }
 
-  /** Replaces displayed vault metadata and deliberately discards any stale selection. */
-  public void replaceVaultMetadata(UnlockedVaultState vaultState) {
+  /** Completes a busy unlocked operation with refreshed metadata and no stale selection. */
+  public void completeVaultOperation(UnlockedVaultState vaultState) {
     Objects.requireNonNull(vaultState, "vaultState");
-    requireState(AppScreen.UNLOCKED_VAULT, VaultSessionState.UNLOCKED, JobState.IDLE);
+    requireState(AppScreen.UNLOCKED_VAULT, VaultSessionState.UNLOCKED, JobState.BUSY);
     transitionTo(AppState.unlocked(vaultState.clearSelection(), JobState.IDLE));
   }
 
