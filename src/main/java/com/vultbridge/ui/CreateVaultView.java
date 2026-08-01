@@ -63,7 +63,7 @@ public final class CreateVaultView extends VBox implements SensitiveView {
     var pathRow = new HBox(8, pathField, chooseButton);
     HBox.setHgrow(pathField, Priority.ALWAYS);
 
-    passphraseField.setPromptText("8–64 characters");
+    passphraseField.setPromptText(PassphraseRules.requirementDescription());
     passphraseField.setId("new-passphrase");
     confirmationField.setPromptText("Enter the passphrase again");
     confirmationField.setId("confirm-passphrase");
@@ -124,7 +124,7 @@ public final class CreateVaultView extends VBox implements SensitiveView {
         showError("The vault filename must end with .vltb.");
       } else if (PassphraseRules.validate(passphrase)
           == PassphraseRules.ValidationResult.INVALID_LENGTH) {
-        showError("Use 8–64 printable ASCII characters.");
+        showError("Use " + PassphraseRules.requirementDescription() + ".");
       } else if (PassphraseRules.validate(passphrase)
           == PassphraseRules.ValidationResult.INVALID_CHARACTER) {
         showError("Only printable ASCII characters are accepted.");

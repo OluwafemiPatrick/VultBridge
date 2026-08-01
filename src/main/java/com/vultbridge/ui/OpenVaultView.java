@@ -99,7 +99,7 @@ public final class OpenVaultView extends VBox implements SensitiveView {
         showError("Choose an existing .vltb vault.");
       } else if (PassphraseRules.validate(passphrase)
           == PassphraseRules.ValidationResult.INVALID_LENGTH) {
-        showError("Use 8–64 printable ASCII characters.");
+        showError("Use " + PassphraseRules.requirementDescription() + ".");
       } else if (PassphraseRules.validate(passphrase)
           == PassphraseRules.ValidationResult.INVALID_CHARACTER) {
         showError("Only printable ASCII characters are accepted.");

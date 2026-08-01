@@ -12,6 +12,11 @@ public final class PassphraseRules {
 
   private PassphraseRules() {}
 
+  /** Returns the authoritative user-facing description of the accepted v1 passphrase range. */
+  public static String requirementDescription() {
+    return MINIMUM_LENGTH + "–" + MAXIMUM_LENGTH + " printable ASCII characters";
+  }
+
   /** Classifies a passphrase without storing or transforming its contents. */
   public static ValidationResult validate(char[] passphrase) {
     if (passphrase.length < MINIMUM_LENGTH || passphrase.length > MAXIMUM_LENGTH) {

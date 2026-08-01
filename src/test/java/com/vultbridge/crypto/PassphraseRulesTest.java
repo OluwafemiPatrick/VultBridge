@@ -6,6 +6,11 @@ import org.junit.jupiter.api.Test;
 
 class PassphraseRulesTest {
   @Test
+  void requirementDescriptionUsesTheAuthoritativeBounds() {
+    assertEquals("8–64 printable ASCII characters", PassphraseRules.requirementDescription());
+  }
+
+  @Test
   void acceptsPrintableAsciiWithinBounds() {
     assertEquals(
         PassphraseRules.ValidationResult.VALID,
