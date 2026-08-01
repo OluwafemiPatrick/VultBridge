@@ -1,0 +1,24 @@
+docs/
+memory/
+z_*.md
+AGENTS.md
+
+# macOS
+.DS_Store
+
+# Gradle
+.gradle/
+build/
+
+# IDEs and editors
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+.vscode/
+
+# Java output
+out/
+*.class
+hs_err_pid*

@@ -1,0 +1,25 @@
+.root {
+    -fx-font-family: system;
+    -fx-font-size: 14px;
+    -fx-background-color: #f6f7f9;
+}
+
+.welcome .title {
+    -fx-font-size: 32px;
+    -fx-font-weight: bold;
+}
+
+.welcome .description {
+    -fx-text-fill: #46505a;
+}
+
+.welcome .button {
+    -fx-min-width: 180px;
+    -fx-min-height: 40px;
+}
+
+.welcome .status {
+    -fx-padding: 18px 0 0 0;
+    -fx-text-fill: #6b7280;
+    -fx-font-size: 12px;
+}
