@@ -15,7 +15,13 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
-/** Phase 1 vault-open form. It validates input but does not open a vault. */
+/**
+ * Presents the Phase 1 vault-open form and validates its user input.
+ *
+ * <p>Path selection does not read the selected vault. Until the encrypted vault engine exists, a
+ * valid submission produces an explanatory message instead of entering an artificial unlocked
+ * state. Temporary passphrase arrays are overwritten after validation.
+ */
 public final class OpenVaultView extends VBox implements SensitiveView {
   private final PasswordField passphraseField = new PasswordField();
   private final Label message = new Label();
@@ -24,6 +30,7 @@ public final class OpenVaultView extends VBox implements SensitiveView {
   private final TextField pathField = new TextField("Choose an existing .vltb file");
   private Path selectedPath;
 
+  /** Creates the form using an injected path chooser and navigation cancellation action. */
   public OpenVaultView(FileDialogService fileDialogs, Runnable cancelAction) {
     this.fileDialogs = Objects.requireNonNull(fileDialogs, "fileDialogs");
     this.cancelAction = Objects.requireNonNull(cancelAction, "cancelAction");
@@ -84,6 +91,7 @@ public final class OpenVaultView extends VBox implements SensitiveView {
   }
 
   private void validateSubmission() {
+    // Clear the visible field immediately and wipe the temporary mutable copy on every exit path.
     char[] passphrase = passphraseField.getText().toCharArray();
     clearSensitiveState();
     try {
@@ -91,7 +99,7 @@ public final class OpenVaultView extends VBox implements SensitiveView {
         showError("Choose an existing .vltb vault.");
       } else if (PassphraseRules.validate(passphrase)
           == PassphraseRules.ValidationResult.INVALID_LENGTH) {
-        showError("Use 12–256 printable ASCII characters.");
+        showError("Use 8–64 printable ASCII characters.");
       } else if (PassphraseRules.validate(passphrase)
           == PassphraseRules.ValidationResult.INVALID_CHARACTER) {
         showError("Only printable ASCII characters are accepted.");
@@ -131,6 +139,7 @@ public final class OpenVaultView extends VBox implements SensitiveView {
             });
   }
 
+  // Removes passphrase text owned by this view.
   @Override
   public void clearSensitiveState() {
     passphraseField.clear();

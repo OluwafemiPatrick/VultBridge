@@ -17,7 +17,13 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
-/** Phase 1 vault-creation form. It validates input but does not write a vault. */
+/**
+ * Presents the Phase 1 vault-creation form and validates its user input.
+ *
+ * <p>The view selects a destination path without touching the filesystem. Until the encrypted vault
+ * engine exists, valid submission produces an explanatory message rather than a placeholder file.
+ * Temporary passphrase arrays are overwritten after validation.
+ */
 public final class CreateVaultView extends VBox implements SensitiveView {
   private final PasswordField passphraseField = new PasswordField();
   private final PasswordField confirmationField = new PasswordField();
@@ -29,6 +35,7 @@ public final class CreateVaultView extends VBox implements SensitiveView {
   private final TextField pathField = new TextField("Choose a new .vltb file");
   private Path selectedPath;
 
+  /** Creates the form using an injected path chooser and navigation cancellation action. */
   public CreateVaultView(FileDialogService fileDialogs, Runnable cancelAction) {
     this.fileDialogs = Objects.requireNonNull(fileDialogs, "fileDialogs");
     this.cancelAction = Objects.requireNonNull(cancelAction, "cancelAction");
@@ -56,7 +63,7 @@ public final class CreateVaultView extends VBox implements SensitiveView {
     var pathRow = new HBox(8, pathField, chooseButton);
     HBox.setHgrow(pathField, Priority.ALWAYS);
 
-    passphraseField.setPromptText("9–64 characters");
+    passphraseField.setPromptText("8–64 characters");
     passphraseField.setId("new-passphrase");
     confirmationField.setPromptText("Enter the passphrase again");
     confirmationField.setId("confirm-passphrase");
@@ -105,6 +112,8 @@ public final class CreateVaultView extends VBox implements SensitiveView {
   }
 
   private void validateSubmission() {
+    // Copy text only long enough to validate it, immediately clear the visible controls, and wipe
+    // both mutable arrays in the finally block on every validation path.
     char[] passphrase = passphraseField.getText().toCharArray();
     char[] confirmation = confirmationField.getText().toCharArray();
     clearSensitiveState();
@@ -115,7 +124,7 @@ public final class CreateVaultView extends VBox implements SensitiveView {
         showError("The vault filename must end with .vltb.");
       } else if (PassphraseRules.validate(passphrase)
           == PassphraseRules.ValidationResult.INVALID_LENGTH) {
-        showError("Use 12–256 printable ASCII characters.");
+        showError("Use 8–64 printable ASCII characters.");
       } else if (PassphraseRules.validate(passphrase)
           == PassphraseRules.ValidationResult.INVALID_CHARACTER) {
         showError("Only printable ASCII characters are accepted.");
@@ -165,6 +174,7 @@ public final class CreateVaultView extends VBox implements SensitiveView {
     return fileName != null && fileName.toString().endsWith(".vltb");
   }
 
+  // Removes passphrase and confirmation text owned by this view.
   @Override
   public void clearSensitiveState() {
     passphraseField.clear();

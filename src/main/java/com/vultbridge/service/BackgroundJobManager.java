@@ -9,7 +9,16 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Runs at most one cooperative I/O or cryptographic job at a time on a bounded executor. */
+/**
+ * Runs cooperative I/O or cryptographic jobs on one lifecycle-owned background worker.
+ *
+ * <p>The manager admits only one active operation, uses a bounded executor, and marshals progress
+ * and terminal callbacks through a {@link UiDispatcher}. Jobs are cancelled cooperatively during
+ * normal use; shutdown adds an interrupt fallback after a bounded wait.
+ *
+ * <p>This class deliberately converts exceptions to {@link JobFailureCategory} values instead of
+ * exposing raw messages that might contain sensitive paths or provider details.
+ */
 public final class BackgroundJobManager implements AutoCloseable {
   private static final Duration DEFAULT_SHUTDOWN_TIMEOUT = Duration.ofSeconds(5);
 
@@ -19,8 +28,11 @@ public final class BackgroundJobManager implements AutoCloseable {
   private JobControl activeJob;
   private boolean closed;
 
+  /** Creates a manager whose notifications are delivered by the supplied UI dispatcher. */
   public BackgroundJobManager(UiDispatcher uiDispatcher) {
     this.uiDispatcher = Objects.requireNonNull(uiDispatcher, "uiDispatcher");
+    // A single worker serializes vault mutation. The bounded queue prevents unbounded retention
+    // even if the one-active-job admission check and executor state change concurrently.
     executor =
         new ThreadPoolExecutor(
             1,
@@ -36,6 +48,11 @@ public final class BackgroundJobManager implements AutoCloseable {
             new ThreadPoolExecutor.AbortPolicy());
   }
 
+  /**
+   * Submits one job and returns its cancellation handle.
+   *
+   * @throws IllegalStateException if the manager is closed or another operation is active
+   */
   public <T> JobHandle submit(BackgroundJob<T> job, JobCallbacks<T> callbacks) {
     Objects.requireNonNull(job, "job");
     Objects.requireNonNull(callbacks, "callbacks");
@@ -59,12 +76,14 @@ public final class BackgroundJobManager implements AutoCloseable {
     return control;
   }
 
+  /** Returns whether a submitted operation has not yet selected its terminal callback. */
   public boolean isActive() {
     synchronized (lifecycleLock) {
       return activeJob != null;
     }
   }
 
+  /** Requests cooperative cancellation of the active operation, if one exists. */
   public void requestCancellation() {
     synchronized (lifecycleLock) {
       if (activeJob != null) {
@@ -73,11 +92,18 @@ public final class BackgroundJobManager implements AutoCloseable {
     }
   }
 
+  // Closes the manager using the default bounded shutdown timeout.
   @Override
   public void close() {
     close(DEFAULT_SHUTDOWN_TIMEOUT);
   }
 
+  /**
+   * Rejects future submissions, requests cancellation, and waits for worker termination.
+   *
+   * <p>If cooperative shutdown exceeds {@code timeout}, the worker is interrupted and receives one
+   * final bounded wait. The method is idempotent.
+   */
   public void close(Duration timeout) {
     Objects.requireNonNull(timeout, "timeout");
     if (timeout.isNegative()) {
@@ -95,6 +121,7 @@ public final class BackgroundJobManager implements AutoCloseable {
       executor.shutdown();
     }
 
+    // Wait outside lifecycleLock so the worker can acquire it while recording completion.
     try {
       if (!executor.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
         executor.shutdownNow();
@@ -112,6 +139,7 @@ public final class BackgroundJobManager implements AutoCloseable {
         new JobContext(
             control,
             progress -> uiDispatcher.dispatch(() -> callbacks.progressed().accept(progress)));
+    // Check both before and after user job code so a late cancellation cannot report success.
     try {
       context.checkpoint();
       T result = job.execute(context);
@@ -130,6 +158,8 @@ public final class BackgroundJobManager implements AutoCloseable {
       throw error;
     }
 
+    // Release the admission gate before dispatching user callback code, allowing callbacks to start
+    // a subsequent operation without racing the completed job.
     finish(control);
     uiDispatcher.dispatch(completion);
   }
@@ -144,6 +174,7 @@ public final class BackgroundJobManager implements AutoCloseable {
   }
 
   private static JobFailureCategory categorize(Exception exception) {
+    // Keep this mapping intentionally coarse; exception messages never cross into the UI layer.
     if (exception instanceof IllegalArgumentException) {
       return JobFailureCategory.INPUT_REJECTED;
     }

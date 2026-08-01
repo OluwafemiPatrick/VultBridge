@@ -1,6 +1,6 @@
 package com.vultbridge.app;
 
-/** Top-level screens in the VultBridge application. */
+/** Identifies each top-level screen that can occupy the application content area. */
 public enum AppScreen {
   WELCOME,
   CREATE_VAULT,

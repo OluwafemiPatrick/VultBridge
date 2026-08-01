@@ -25,7 +25,13 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
-/** Metadata-only unlocked vault screen. File data never enters this view. */
+/**
+ * Renders the unlocked vault as a flat, sortable, metadata-only file table.
+ *
+ * <p>Action availability is derived from {@link AppState}; selection changes are sent back through
+ * callbacks rather than mutating application state locally. Plaintext file contents never enter
+ * this view.
+ */
 public final class UnlockedVaultView extends BorderPane {
   private static final DateTimeFormatter IMPORTED_AT_FORMAT =
       DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM).withZone(ZoneId.systemDefault());
@@ -34,6 +40,7 @@ public final class UnlockedVaultView extends BorderPane {
   private final UnlockedVaultState vaultState;
   private final Label message = new Label();
 
+  /** Creates the unlocked screen from one validated state snapshot and its UI actions. */
   public UnlockedVaultView(
       AppState state,
       FileDialogService fileDialogs,
@@ -127,6 +134,8 @@ public final class UnlockedVaultView extends BorderPane {
     table.getColumns().add(importedColumn);
     table.setItems(FXCollections.observableArrayList(vaultState.items()));
     vaultState.selectedItem().ifPresent(table.getSelectionModel()::select);
+    // Mirror JavaFX selection into the immutable application state while avoiding feedback when the
+    // table is initialized from an already-selected snapshot.
     table
         .getSelectionModel()
         .selectedItemProperty()
@@ -200,6 +209,7 @@ public final class UnlockedVaultView extends BorderPane {
         "Deletion removes the item from the file list but does not immediately shrink the physical vault file.");
     var acknowledge = new ButtonType("Acknowledge", ButtonBar.ButtonData.OK_DONE);
     alert.getButtonTypes().setAll(ButtonType.CANCEL, acknowledge);
+    // Phase 1 confirms semantics but does not pretend that a manifest mutation occurred.
     if (alert.showAndWait().filter(acknowledge::equals).isPresent()) {
       message.setText("Deletion will be enabled when the encrypted vault engine is ready.");
     }

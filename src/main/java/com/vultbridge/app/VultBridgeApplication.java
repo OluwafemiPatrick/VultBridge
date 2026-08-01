@@ -5,7 +5,12 @@ import javafx.application.Application;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
 
-/** JavaFX entry point for VultBridge. */
+/**
+ * JavaFX process entry point and owner of the application-wide UI lifecycle.
+ *
+ * <p>It creates the single application view, applies the shared stylesheet, and guarantees that
+ * sensitive controls and background resources are closed when JavaFX stops.
+ */
 public final class VultBridgeApplication extends Application {
   private static final double INITIAL_WIDTH = 760;
   private static final double INITIAL_HEIGHT = 480;
@@ -14,6 +19,7 @@ public final class VultBridgeApplication extends Application {
   /** Creates the JavaFX application instance. */
   public VultBridgeApplication() {}
 
+  // Builds and displays the primary application window.
   @Override
   public void start(Stage stage) {
     appView = new AppView();
@@ -30,6 +36,7 @@ public final class VultBridgeApplication extends Application {
     stage.show();
   }
 
+  // Releases sensitive view state and the background worker during JavaFX shutdown.
   @Override
   public void stop() {
     if (appView != null) {
@@ -37,6 +44,7 @@ public final class VultBridgeApplication extends Application {
     }
   }
 
+  /** Launches JavaFX when the application is started from a conventional Java entry point. */
   public static void main(String[] args) {
     launch(args);
   }

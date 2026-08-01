@@ -16,7 +16,23 @@ class PassphraseRulesTest {
   void rejectsShortPassphrase() {
     assertEquals(
         PassphraseRules.ValidationResult.INVALID_LENGTH,
-        PassphraseRules.validate("too short".toCharArray()));
+        PassphraseRules.validate("1234567".toCharArray()));
+  }
+
+  @Test
+  void acceptsPassphrasesAtLengthBoundaries() {
+    assertEquals(
+        PassphraseRules.ValidationResult.VALID, PassphraseRules.validate("12345678".toCharArray()));
+    assertEquals(
+        PassphraseRules.ValidationResult.VALID,
+        PassphraseRules.validate("a".repeat(64).toCharArray()));
+  }
+
+  @Test
+  void rejectsPassphraseAboveMaximumLength() {
+    assertEquals(
+        PassphraseRules.ValidationResult.INVALID_LENGTH,
+        PassphraseRules.validate("a".repeat(65).toCharArray()));
   }
 
   @Test

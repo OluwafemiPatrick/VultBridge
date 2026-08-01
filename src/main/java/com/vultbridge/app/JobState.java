@@ -1,6 +1,6 @@
 package com.vultbridge.app;
 
-/** Whether a state-changing application operation is active. */
+/** Indicates whether a state-changing operation currently owns the application workflow. */
 public enum JobState {
   IDLE,
   BUSY

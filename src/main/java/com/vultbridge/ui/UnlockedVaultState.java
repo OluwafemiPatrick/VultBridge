@@ -6,7 +6,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Immutable metadata-only state for an unlocked vault view. */
+/**
+ * Immutable metadata-only snapshot used to render an unlocked vault.
+ *
+ * <p>The constructor validates file-count and live-byte limits, unique item identifiers, aggregate
+ * sizes, and selection membership. It contains no plaintext file data, passphrase, key material, or
+ * complete vault path.
+ */
 public record UnlockedVaultState(
     String vaultDisplayName,
     List<VaultItemViewModel> items,
@@ -34,6 +40,8 @@ public record UnlockedVaultState(
       throw new IllegalArgumentException("Physical vault size must not be negative");
     }
 
+    // Recompute the aggregate instead of trusting a caller-supplied total. Checked addition rejects
+    // overflow before inconsistent metadata can reach the UI.
     long computedLiveBytes = 0;
     var itemIds = new HashSet<UUID>();
     for (var item : items) {
@@ -51,10 +59,12 @@ public record UnlockedVaultState(
     }
   }
 
+  /** Creates a validated empty-vault snapshot with no selected item. */
   public static UnlockedVaultState empty(String vaultDisplayName, long physicalVaultBytes) {
     return new UnlockedVaultState(vaultDisplayName, List.of(), 0, physicalVaultBytes, null);
   }
 
+  /** Resolves the selected identifier to its item, or returns empty when nothing is selected. */
   public Optional<VaultItemViewModel> selectedItem() {
     if (selectedItemId == null) {
       return Optional.empty();
@@ -62,20 +72,24 @@ public record UnlockedVaultState(
     return items.stream().filter(item -> item.itemId().equals(selectedItemId)).findFirst();
   }
 
+  /** Returns whether this snapshot contains a selected item identifier. */
   public boolean hasSelection() {
     return selectedItemId != null;
   }
 
+  /** Returns whether the vault contains at least one live file entry. */
   public boolean hasFiles() {
     return !items.isEmpty();
   }
 
+  /** Returns a new snapshot selecting an item that must already exist in the item list. */
   public UnlockedVaultState select(UUID itemId) {
     Objects.requireNonNull(itemId, "itemId");
     return new UnlockedVaultState(
         vaultDisplayName, items, liveLogicalFileBytes, physicalVaultBytes, itemId);
   }
 
+  /** Returns this snapshot without a selection, reusing it when already clear. */
   public UnlockedVaultState clearSelection() {
     if (selectedItemId == null) {
       return this;

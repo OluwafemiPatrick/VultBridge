@@ -16,7 +16,13 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 
-/** Root JavaFX container. Child views request navigation through the state machine. */
+/**
+ * Root JavaFX container that coordinates navigation, dialogs, and application-owned services.
+ *
+ * <p>Child views request navigation through {@link AppStateMachine}; they never replace scenes or
+ * imply that an unavailable vault operation succeeded. This view also owns cleanup of sensitive
+ * controls and the background worker.
+ */
 public final class AppView extends BorderPane implements AutoCloseable {
   private final AppStateMachine stateMachine = new AppStateMachine();
   private final FileDialogService fileDialogs = new JavaFxFileDialogService();
@@ -25,6 +31,7 @@ public final class AppView extends BorderPane implements AutoCloseable {
   private final BackgroundJobManager backgroundJobs = new BackgroundJobManager(Platform::runLater);
   private final Label securityState = new Label();
 
+  /** Constructs the application shell and renders its initial state. */
   public AppView() {
     getStyleClass().add("app-view");
     setTop(createHeader());
@@ -44,6 +51,7 @@ public final class AppView extends BorderPane implements AutoCloseable {
   }
 
   private void render(AppState state) {
+    // Clear the outgoing view before detaching it so passphrase controls do not survive navigation.
     clearSensitiveState();
     securityState.setText(
         state.sessionState() == VaultSessionState.UNLOCKED
@@ -56,6 +64,7 @@ public final class AppView extends BorderPane implements AutoCloseable {
                 ? "security-state-unlocked"
                 : "security-state");
 
+    // Busy state disables the complete content tree, preventing conflicting user operations.
     setDisable(state.jobState() == JobState.BUSY);
     switch (state.screen()) {
       case WELCOME ->
@@ -83,7 +92,7 @@ public final class AppView extends BorderPane implements AutoCloseable {
     }
   }
 
-  /** Cancels active work at its next checkpoint and releases application-owned worker threads. */
+  // Cancels active work at its next checkpoint and releases application-owned worker threads.
   @Override
   public void close() {
     clearSensitiveState();
@@ -91,6 +100,7 @@ public final class AppView extends BorderPane implements AutoCloseable {
   }
 
   private void lockVault() {
+    // Phase 1 owns metadata only, so locking is synchronous until a real session exists.
     stateMachine.beginOperation();
     stateMachine.completeLock();
   }

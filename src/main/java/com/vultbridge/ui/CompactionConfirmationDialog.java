@@ -13,15 +13,23 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 
-/** Safe Phase 1 confirmation shell for Compact and Replace. */
+/**
+ * Builds the Phase 1 confirmation dialog for the destructive Compact &amp; Replace workflow.
+ *
+ * <p>The dialog makes the candidate name, estimated space requirement, destination, and
+ * validate-before-delete guarantee explicit. Its start action remains disabled until the real
+ * compaction engine can enforce those guarantees.
+ */
 public final class CompactionConfirmationDialog {
   private final FileDialogService fileDialogs;
   private final SecureRandom random = new SecureRandom();
 
+  /** Creates a dialog controller using a path-selection-only filesystem boundary. */
   public CompactionConfirmationDialog(FileDialogService fileDialogs) {
     this.fileDialogs = Objects.requireNonNull(fileDialogs, "fileDialogs");
   }
 
+  /** Displays compaction details for the supplied metadata-only vault snapshot. */
   public void show(Window owner, UnlockedVaultState vaultState) {
     Objects.requireNonNull(vaultState, "vaultState");
     String outputName =
@@ -84,6 +92,8 @@ public final class CompactionConfirmationDialog {
     content.setPrefWidth(540);
     dialog.getDialogPane().setContent(content);
 
+    // The confirmation is intentionally informative in Phase 1; enabling this button belongs to
+    // the verified compaction service introduced in a later phase.
     var startType = new ButtonType("Start compaction", ButtonBar.ButtonData.OK_DONE);
     dialog.getDialogPane().getButtonTypes().addAll(ButtonType.CANCEL, startType);
     dialog.getDialogPane().lookupButton(startType).setDisable(true);

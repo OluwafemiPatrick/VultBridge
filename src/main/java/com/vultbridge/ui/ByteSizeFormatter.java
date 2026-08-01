@@ -2,7 +2,7 @@ package com.vultbridge.ui;
 
 import java.util.Locale;
 
-/** Formats non-negative byte counts for compact UI labels. */
+/** Formats non-negative byte counts as locale-stable binary units for compact UI labels. */
 public final class ByteSizeFormatter {
   private static final long KIBIBYTE = 1024;
   private static final long MEBIBYTE = KIBIBYTE * 1024;
@@ -10,6 +10,7 @@ public final class ByteSizeFormatter {
 
   private ByteSizeFormatter() {}
 
+  /** Converts a byte count to bytes, KiB, MiB, or GiB with restrained precision. */
   public static String format(long bytes) {
     if (bytes < 0) {
       throw new IllegalArgumentException("Byte count must not be negative");

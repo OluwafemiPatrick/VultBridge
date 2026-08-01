@@ -8,7 +8,12 @@ import java.util.Objects;
 import java.util.function.IntSupplier;
 import java.util.regex.Pattern;
 
-/** Produces the human-readable timestamped output name required by Compact & Replace. */
+/**
+ * Produces the human-readable timestamped filename required by Compact &amp; Replace.
+ *
+ * <p>Dependencies on time and randomness are supplied as arguments, making naming deterministic in
+ * tests. A prior compaction suffix is removed so repeated compactions do not grow the base name.
+ */
 public final class CompactionNameGenerator {
   private static final Pattern PRIOR_COMPACTION_SUFFIX =
       Pattern.compile("-\\d{8}T\\d{6}Z-[0-9a-f]{6}$");
@@ -17,6 +22,7 @@ public final class CompactionNameGenerator {
 
   private CompactionNameGenerator() {}
 
+  /** Creates a UTC timestamped {@code .vltb} name with a six-digit hexadecimal collision suffix. */
   public static String generate(
       String vaultDisplayName, Instant timestamp, IntSupplier randomSuffixSource) {
     Objects.requireNonNull(vaultDisplayName, "vaultDisplayName");
