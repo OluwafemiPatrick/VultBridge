@@ -1,7 +1,9 @@
 docs/
 memory/
+mockup/
 z_*.md
 AGENTS.md
+.gitignore
 
 # macOS
 .DS_Store

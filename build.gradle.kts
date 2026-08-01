@@ -35,7 +35,9 @@ dependencies {
     errorprone("com.google.errorprone:error_prone_core:2.49.0")
 
     testImplementation(platform("org.junit:junit-bom:5.14.3"))
+    testImplementation("org.hamcrest:hamcrest:2.2")
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("org.testfx:testfx-junit5:4.0.18")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
