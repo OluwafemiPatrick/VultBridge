@@ -45,4 +45,13 @@ class VaultFormatTest {
         VaultFormat.ARGON2_CREATE_PARALLELISM >= VaultFormat.ARGON2_MIN_PARALLELISM
             && VaultFormat.ARGON2_CREATE_PARALLELISM <= VaultFormat.ARGON2_MAX_PARALLELISM);
   }
+
+  @Test
+  void parserAndVaultPolicyLimitsMatchTheV1Blueprint() {
+    assertEquals(10_000, VaultFormat.MAXIMUM_FILE_COUNT);
+    assertEquals(100L * 1024 * 1024 * 1024, VaultFormat.MAXIMUM_LIVE_FILE_BYTES);
+    assertEquals(4 * 1024 * 1024, VaultFormat.FILE_CHUNK_PLAINTEXT_BYTES);
+    assertEquals(16 * 1024 * 1024, VaultFormat.MAXIMUM_MANIFEST_PLAINTEXT_BYTES);
+    assertEquals(64 * 1024, VaultFormat.MAXIMUM_COMMIT_PLAINTEXT_BYTES);
+  }
 }

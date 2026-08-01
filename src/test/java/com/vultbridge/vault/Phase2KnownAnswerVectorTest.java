@@ -1,6 +1,7 @@
 package com.vultbridge.vault;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.vultbridge.crypto.Argon2idKdf;
 import com.vultbridge.crypto.Argon2idParameters;
@@ -9,6 +10,7 @@ import com.vultbridge.crypto.ChaCha20Poly1305;
 import com.vultbridge.crypto.HmacSha256;
 import com.vultbridge.crypto.SensitiveBytes;
 import com.vultbridge.crypto.V1KeyDerivation;
+import com.vultbridge.crypto.V1KeyHierarchy;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HexFormat;
@@ -87,6 +89,24 @@ class Phase2KnownAnswerVectorTest {
           FixedHeaderCodec.encode(new UnverifiedFixedHeader(envelope, slotA, slotB));
       assertArrayEquals(bytes(vector, "fixedHeader"), fixedHeader);
       assertArrayEquals(fixedHeader, FixedHeaderCodec.encode(FixedHeaderCodec.parse(fixedHeader)));
+    }
+  }
+
+  @Test
+  void literalHeaderFollowsTheCompletePhase2TrustOrder()
+      throws IOException, HeaderParsingException, AuthenticationFailedException {
+    Properties vector = loadVector();
+    UnverifiedFixedHeader parsed = FixedHeaderCodec.parse(bytes(vector, "fixedHeader"));
+
+    try (var passphrase = SensitiveBytes.copyOf(bytes(vector, "passphraseHex"));
+        var keys = V1KeyHierarchy.unwrapKeySet(passphrase, parsed.wrappedMasterKey())) {
+      var authenticatedSlots = HeaderSlotAuthenticator.verifyAndOrder(parsed, keys);
+
+      assertEquals(2, authenticatedSlots.size());
+      assertEquals(1, authenticatedSlots.get(0).slotIndex());
+      assertEquals(2, authenticatedSlots.get(0).generation());
+      assertEquals(0, authenticatedSlots.get(1).slotIndex());
+      assertEquals(1, authenticatedSlots.get(1).generation());
     }
   }
 

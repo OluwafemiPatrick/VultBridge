@@ -6,11 +6,11 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * Creates and unlocks the VultBridge v1 master-key hierarchy without performing filesystem I/O.
+ * Creates and unwraps the VultBridge v1 master-key hierarchy without performing filesystem I/O.
  *
  * <p>The public creation path always obtains randomness from {@link SecureRandomByteSource}; a
- * package-private injection seam supports deterministic and failure-path tests. Unlock maps every
- * authenticated-decryption failure to the same non-sensitive exception. Temporary and
+ * package-private injection seam supports deterministic and failure-path tests. Unwrapping maps
+ * every authenticated-decryption failure to the same non-sensitive exception. Temporary and
  * not-yet-transferred keys are wiped on every exit, including unchecked {@link Error} paths.
  */
 public final class V1KeyHierarchy {
@@ -58,8 +58,13 @@ public final class V1KeyHierarchy {
     }
   }
 
-  /** Authenticates and unwraps an existing envelope into a newly owned session key set. */
-  public static VaultKeySet unlock(SensitiveBytes passphrase, WrappedMasterKey envelope)
+  /**
+   * Authenticates and unwraps an existing key envelope into a newly owned session key set.
+   *
+   * <p>This operation deliberately does not claim to unlock a vault: Phase 3 must still
+   * authenticate the header slots, commit, and manifest before exposing any item metadata.
+   */
+  public static VaultKeySet unwrapKeySet(SensitiveBytes passphrase, WrappedMasterKey envelope)
       throws AuthenticationFailedException {
     Objects.requireNonNull(passphrase, "passphrase");
     Objects.requireNonNull(envelope, "envelope");

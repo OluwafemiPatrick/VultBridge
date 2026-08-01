@@ -1,5 +1,6 @@
 package com.vultbridge.ui;
 
+import com.vultbridge.vault.VaultFormat;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -19,9 +20,6 @@ public record UnlockedVaultState(
     long liveLogicalFileBytes,
     long physicalVaultBytes,
     UUID selectedItemId) {
-  public static final int MAXIMUM_FILE_COUNT = 10_000;
-  public static final long MAXIMUM_LIVE_FILE_BYTES = 100L * 1024 * 1024 * 1024;
-
   public UnlockedVaultState {
     Objects.requireNonNull(vaultDisplayName, "vaultDisplayName");
     Objects.requireNonNull(items, "items");
@@ -30,11 +28,14 @@ public record UnlockedVaultState(
     }
 
     items = List.copyOf(items);
-    if (items.size() > MAXIMUM_FILE_COUNT) {
+    if (items.size() > VaultFormat.MAXIMUM_FILE_COUNT) {
       throw new IllegalArgumentException("Vault metadata exceeds the file-count limit");
     }
-    if (liveLogicalFileBytes < 0 || liveLogicalFileBytes > MAXIMUM_LIVE_FILE_BYTES) {
-      throw new IllegalArgumentException("Live file data is outside the supported range");
+    if (liveLogicalFileBytes < 0) {
+      throw new IllegalArgumentException("Live file data must not be negative");
+    }
+    if (liveLogicalFileBytes > VaultFormat.MAXIMUM_LIVE_FILE_BYTES) {
+      throw new IllegalArgumentException("Live file data exceeds the supported limit");
     }
     if (physicalVaultBytes < 0) {
       throw new IllegalArgumentException("Physical vault size must not be negative");

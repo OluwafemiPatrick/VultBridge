@@ -2,9 +2,11 @@ package com.vultbridge.ui;
 
 import com.vultbridge.app.AppState;
 import com.vultbridge.platform.FileDialogService;
+import com.vultbridge.vault.VaultFormat;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -81,7 +83,14 @@ public final class UnlockedVaultView extends BorderPane {
     HBox.setHgrow(heading, Priority.ALWAYS);
 
     var summaries = new HBox(8);
-    summaries.getChildren().add(summary("Files", vaultState.items().size() + " of 10,000"));
+    summaries
+        .getChildren()
+        .add(
+            summary(
+                "Files",
+                vaultState.items().size()
+                    + " of "
+                    + String.format(Locale.ROOT, "%,d", VaultFormat.MAXIMUM_FILE_COUNT)));
     summaries
         .getChildren()
         .add(
@@ -94,7 +103,9 @@ public final class UnlockedVaultView extends BorderPane {
         .add(
             summary(
                 "Live-data limit",
-                ByteSizeFormatter.format(vaultState.liveLogicalFileBytes()) + " of 100 GiB"));
+                ByteSizeFormatter.format(vaultState.liveLogicalFileBytes())
+                    + " of "
+                    + ByteSizeFormatter.format(VaultFormat.MAXIMUM_LIVE_FILE_BYTES)));
     summaries.getChildren().forEach(child -> HBox.setHgrow(child, Priority.ALWAYS));
 
     message.getStyleClass().add("form-message");

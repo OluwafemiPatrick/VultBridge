@@ -24,6 +24,12 @@ public final class VaultFormat {
   public static final int WRAPPED_MASTER_VAULT_KEY_BYTES = MASTER_VAULT_KEY_BYTES + AEAD_TAG_BYTES;
   public static final int HMAC_SHA256_BYTES = 32;
 
+  public static final int MAXIMUM_FILE_COUNT = 10_000;
+  public static final long MAXIMUM_LIVE_FILE_BYTES = 100L * 1024 * 1024 * 1024;
+  public static final int FILE_CHUNK_PLAINTEXT_BYTES = 4 * 1024 * 1024;
+  public static final int MAXIMUM_MANIFEST_PLAINTEXT_BYTES = 16 * 1024 * 1024;
+  public static final int MAXIMUM_COMMIT_PLAINTEXT_BYTES = 64 * 1024;
+
   public static final int ARGON2_CREATE_MEMORY_KIB = 65_536;
   public static final int ARGON2_CREATE_ITERATIONS = 3;
   public static final int ARGON2_CREATE_PARALLELISM = 1;

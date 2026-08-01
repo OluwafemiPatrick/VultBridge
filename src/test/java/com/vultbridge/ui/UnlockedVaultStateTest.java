@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.vultbridge.vault.VaultFormat;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -62,6 +64,53 @@ class UnlockedVaultStateTest {
     assertFalse(state.hasFiles());
     assertFalse(state.hasSelection());
     assertTrue(state.selectedItem().isEmpty());
+  }
+
+  @Test
+  void acceptsAndRejectsTheAuthoritativeLiveDataBoundary() {
+    var maximumItem =
+        new VaultItemViewModel(
+            ITEM_ID, "maximum.bin", VaultFormat.MAXIMUM_LIVE_FILE_BYTES, Instant.EPOCH);
+
+    var accepted =
+        new UnlockedVaultState(
+            "MyVault",
+            List.of(maximumItem),
+            VaultFormat.MAXIMUM_LIVE_FILE_BYTES,
+            VaultFormat.MAXIMUM_LIVE_FILE_BYTES,
+            null);
+
+    assertEquals(VaultFormat.MAXIMUM_LIVE_FILE_BYTES, accepted.liveLogicalFileBytes());
+    var oversizedItem =
+        new VaultItemViewModel(
+            ITEM_ID, "oversized.bin", VaultFormat.MAXIMUM_LIVE_FILE_BYTES + 1, Instant.EPOCH);
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new UnlockedVaultState(
+                "MyVault",
+                List.of(oversizedItem),
+                VaultFormat.MAXIMUM_LIVE_FILE_BYTES + 1,
+                VaultFormat.MAXIMUM_LIVE_FILE_BYTES + 1,
+                null));
+  }
+
+  @Test
+  void acceptsAndRejectsTheAuthoritativeFileCountBoundary() {
+    var items = new ArrayList<VaultItemViewModel>(VaultFormat.MAXIMUM_FILE_COUNT + 1);
+    for (int index = 0; index < VaultFormat.MAXIMUM_FILE_COUNT; index++) {
+      items.add(new VaultItemViewModel(new UUID(0, index + 1L), "file-" + index, 0, Instant.EPOCH));
+    }
+
+    var accepted = new UnlockedVaultState("MyVault", items, 0, 256, null);
+    assertEquals(VaultFormat.MAXIMUM_FILE_COUNT, accepted.items().size());
+
+    items.add(
+        new VaultItemViewModel(
+            new UUID(0, VaultFormat.MAXIMUM_FILE_COUNT + 1L), "one-too-many", 0, Instant.EPOCH));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> new UnlockedVaultState("MyVault", items, 0, 256, null));
   }
 
   private static void selectForTest(UnlockedVaultState state, UUID itemId) {

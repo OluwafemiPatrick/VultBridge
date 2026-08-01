@@ -12,35 +12,35 @@ import java.util.HexFormat;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
 
-/** Verifies deterministic v1 master-key creation, authenticated unlock, and key cleanup. */
+/** Verifies deterministic v1 master-key creation, authenticated unwrapping, and key cleanup. */
 class V1KeyHierarchyTest {
   private static final HexFormat HEX = HexFormat.of();
   private static final String VECTOR_RESOURCE = "/com/vultbridge/vectors/v1-phase2.properties";
 
   @Test
-  void productionCreationUsesSecureRandomnessAndUnlocks() throws AuthenticationFailedException {
+  void productionCreationUsesSecureRandomnessAndUnwraps() throws AuthenticationFailedException {
     try (var passphrase = PassphraseEncoding.encode("correct horse battery staple".toCharArray());
         var created = V1KeyHierarchy.create(passphrase);
-        var unlocked = V1KeyHierarchy.unlock(passphrase, created.wrappedMasterKey());
+        var unwrapped = V1KeyHierarchy.unwrapKeySet(passphrase, created.wrappedMasterKey());
         var createdMaster = created.keys().copyMasterVaultKey();
-        var unlockedMaster = unlocked.copyMasterVaultKey()) {
-      assertArrayEquals(created.keys().vaultId(), unlocked.vaultId());
-      assertArrayEquals(createdMaster.copy(), unlockedMaster.copy());
+        var unwrappedMaster = unwrapped.copyMasterVaultKey()) {
+      assertArrayEquals(created.keys().vaultId(), unwrapped.vaultId());
+      assertArrayEquals(createdMaster.copy(), unwrappedMaster.copy());
     }
   }
 
   @Test
-  void deterministicCreationUnlocksToTheSameOwnedKeys() throws AuthenticationFailedException {
+  void deterministicCreationUnwrapsToTheSameOwnedKeys() throws AuthenticationFailedException {
     try (var passphrase = PassphraseEncoding.encode("correct horse battery staple".toCharArray());
         var created = V1KeyHierarchy.create(passphrase, new CountingRandomSource());
-        var unlocked = V1KeyHierarchy.unlock(passphrase, created.wrappedMasterKey());
+        var unwrapped = V1KeyHierarchy.unwrapKeySet(passphrase, created.wrappedMasterKey());
         var createdMaster = created.keys().copyMasterVaultKey();
-        var unlockedMaster = unlocked.copyMasterVaultKey();
+        var unwrappedMaster = unwrapped.copyMasterVaultKey();
         var createdHeader = created.keys().copyHeaderMacKey();
-        var unlockedHeader = unlocked.copyHeaderMacKey()) {
-      assertArrayEquals(created.keys().vaultId(), unlocked.vaultId());
-      assertArrayEquals(createdMaster.copy(), unlockedMaster.copy());
-      assertArrayEquals(createdHeader.copy(), unlockedHeader.copy());
+        var unwrappedHeader = unwrapped.copyHeaderMacKey()) {
+      assertArrayEquals(created.keys().vaultId(), unwrapped.vaultId());
+      assertArrayEquals(createdMaster.copy(), unwrappedMaster.copy());
+      assertArrayEquals(createdHeader.copy(), unwrappedHeader.copy());
     }
   }
 
@@ -127,16 +127,16 @@ class V1KeyHierarchyTest {
     Properties vector = loadVector();
     try (var passphrase = SensitiveBytes.copyOf(vectorBytes(vector, "passphraseHex"));
         var created = V1KeyHierarchy.create(passphrase, new VectorRandomSource(vector));
-        var unlocked = V1KeyHierarchy.unlock(passphrase, created.wrappedMasterKey());
+        var unwrapped = V1KeyHierarchy.unwrapKeySet(passphrase, created.wrappedMasterKey());
         var masterKey = created.keys().copyMasterVaultKey();
-        var unlockedMasterKey = unlocked.copyMasterVaultKey()) {
+        var unwrappedMasterKey = unwrapped.copyMasterVaultKey()) {
       assertArrayEquals(vectorBytes(vector, "vaultId"), created.wrappedMasterKey().vaultId());
       assertArrayEquals(vectorBytes(vector, "kdfSalt"), created.wrappedMasterKey().kdfSalt());
       assertArrayEquals(vectorBytes(vector, "wrapNonce"), created.wrappedMasterKey().wrapNonce());
       assertArrayEquals(
           vectorBytes(vector, "wrappedMasterVaultKey"), created.wrappedMasterKey().wrappedKey());
       assertArrayEquals(vectorBytes(vector, "masterVaultKey"), masterKey.copy());
-      assertArrayEquals(masterKey.copy(), unlockedMasterKey.copy());
+      assertArrayEquals(masterKey.copy(), unwrappedMasterKey.copy());
     }
   }
 
@@ -175,7 +175,8 @@ class V1KeyHierarchyTest {
 
   private static void assertUnlockFails(SensitiveBytes passphrase, WrappedMasterKey envelope) {
     assertThrows(
-        AuthenticationFailedException.class, () -> V1KeyHierarchy.unlock(passphrase, envelope));
+        AuthenticationFailedException.class,
+        () -> V1KeyHierarchy.unwrapKeySet(passphrase, envelope));
   }
 
   private static Properties loadVector() throws IOException {
