@@ -37,6 +37,9 @@ import org.testfx.util.WaitForAsyncUtils;
 
 @ExtendWith(ApplicationExtension.class)
 class AppViewTest {
+  private static final String COMPACTED_OUTPUT_PATTERN =
+      "ui-workflow-\\d{8}T\\d{6}Z-[0-9a-f]{6}\\.vltb";
+
   @TempDir Path temporaryDirectory;
   private AppView appView;
   private WorkflowDialogs dialogs;
@@ -136,6 +139,23 @@ class AppViewTest {
   }
 
   @Test
+  void confirmsAndCompletesCompactionThroughTheBackgroundWorkflow(FxRobot robot) throws Exception {
+    createAndUnlock(robot);
+    dialogs.setImports(List.of(temporaryDirectory.resolve("accepted.bin")));
+    fire(robot, "#import-files-button");
+    waitUntil(() -> selectedFileActionsAreReady(robot));
+
+    dialogs.setCompactionDirectory(temporaryDirectory);
+    fire(robot, "#compact-vault-button");
+    waitUntil(() -> findVisibleButton("Start compaction").isPresent());
+    robot.interact(() -> findVisibleButton("Start compaction").orElseThrow().fire());
+
+    Path source = temporaryDirectory.resolve("ui-workflow.vltb");
+    waitUntil(() -> !Files.exists(source) && compactedOutputExists(temporaryDirectory));
+    assertTrue(robot.lookup("#unlocked-vault-view").queryAll().size() == 1);
+  }
+
+  @Test
   void lockRemainsAvailableAndWaitsForActiveImportCancellation(FxRobot robot) throws Exception {
     createAndUnlock(robot);
     Path large = temporaryDirectory.resolve("large-active-import.bin");
@@ -205,6 +225,18 @@ class AppViewTest {
         && !robot.lookup("#import-files-button").queryAs(Button.class).isDisabled();
   }
 
+  private static boolean compactedOutputExists(Path directory) {
+    try (var paths = Files.list(directory)) {
+      return paths.anyMatch(
+          path -> {
+            Path fileName = path.getFileName();
+            return fileName != null && fileName.toString().matches(COMPACTED_OUTPUT_PATTERN);
+          });
+    } catch (java.io.IOException exception) {
+      return false;
+    }
+  }
+
   private static Optional<Button> findVisibleButton(String text) {
     return Window.getWindows().stream()
         .filter(Window::isShowing)
@@ -220,6 +252,7 @@ class AppViewTest {
     private final Path vault;
     private List<Path> imports;
     private Optional<Path> exportDestination = Optional.empty();
+    private Optional<Path> compactionDirectory = Optional.empty();
 
     private WorkflowDialogs(Path vault, List<Path> imports) {
       this.vault = vault;
@@ -232,6 +265,10 @@ class AppViewTest {
 
     private void setExportDestination(Path destination) {
       exportDestination = Optional.of(destination);
+    }
+
+    private void setCompactionDirectory(Path destination) {
+      compactionDirectory = Optional.of(destination);
     }
 
     @Override
@@ -256,7 +293,7 @@ class AppViewTest {
 
     @Override
     public Optional<Path> chooseCompactionDirectory(Window owner) {
-      return Optional.empty();
+      return compactionDirectory;
     }
   }
 }

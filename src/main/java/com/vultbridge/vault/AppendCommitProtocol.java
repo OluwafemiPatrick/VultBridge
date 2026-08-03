@@ -161,6 +161,81 @@ public final class AppendCommitProtocol {
     return new RecordRef(recordId, offset, layout.storedLength(), RecordRole.FILE);
   }
 
+  /**
+   * Streams authenticated FILE chunks from one vault into a new FILE record in this vault.
+   *
+   * <p>Each source chunk is authenticated before the destination chunk is encrypted and written.
+   * Both channels and key sets are borrowed; the caller retains ownership. Cancellation is checked
+   * between complete chunks, and an interrupted record remains unreachable until a later COMMIT.
+   */
+  public RecordRef appendFileRecordFromVault(
+      RecordId destinationRecordId,
+      FileRecordLayout destinationLayout,
+      VaultKeySet destinationKeys,
+      FileChannel sourceVault,
+      VaultKeySet sourceKeys,
+      ManifestEntry sourceEntry,
+      long sourceAuthenticatedCommitEnd,
+      BooleanSupplier cancellationRequested)
+      throws IOException, VaultDataException {
+    Objects.requireNonNull(destinationRecordId, "destinationRecordId");
+    Objects.requireNonNull(destinationLayout, "destinationLayout");
+    Objects.requireNonNull(destinationKeys, "destinationKeys");
+    Objects.requireNonNull(sourceVault, "sourceVault");
+    Objects.requireNonNull(sourceKeys, "sourceKeys");
+    Objects.requireNonNull(sourceEntry, "sourceEntry");
+    Objects.requireNonNull(cancellationRequested, "cancellationRequested");
+    if (sourceEntry.logicalSize() != destinationLayout.logicalSize()
+        || sourceEntry.chunkCount() != destinationLayout.chunkCount()
+        || finalAppendedRecord != null) {
+      throw new IllegalArgumentException("Compaction FILE layout is inconsistent");
+    }
+    if (cancellationRequested.getAsBoolean()) {
+      throw new CancellationException();
+    }
+
+    long offset = channel.size();
+    if (offset < VaultFormat.FIXED_HEADER_BYTES) {
+      throw new IOException("Vault header is incomplete");
+    }
+    actions.write(
+        channel,
+        ByteBuffer.wrap(
+            RecordFrameCodec.encodeHeader(
+                new RecordFrameHeader(destinationRecordId, destinationLayout.storedLength()))),
+        offset);
+
+    long[] bodyOffset = {Math.addExact(offset, VaultFormat.RECORD_FRAME_HEADER_BYTES)};
+    FileRecordReader.streamChunks(
+        sourceVault,
+        sourceKeys,
+        sourceEntry,
+        sourceAuthenticatedCommitEnd,
+        cancellationRequested,
+        (chunkIndex, plaintext, plaintextLength) -> {
+          byte[] encrypted =
+              RecordCrypto.encryptFileChunk(
+                  destinationKeys, destinationRecordId, destinationLayout, chunkIndex, plaintext);
+          try {
+            actions.write(channel, ByteBuffer.wrap(encrypted), bodyOffset[0]);
+            bodyOffset[0] = Math.addExact(bodyOffset[0], encrypted.length);
+          } finally {
+            Arrays.fill(encrypted, (byte) 0);
+          }
+        });
+
+    long expectedEnd =
+        Math.addExact(
+            offset,
+            Math.addExact(VaultFormat.RECORD_FRAME_HEADER_BYTES, destinationLayout.storedLength()));
+    if (bodyOffset[0] != expectedEnd) {
+      throw new IllegalStateException("Compacted FILE record length diverged from its layout");
+    }
+    state = State.APPENDED;
+    return new RecordRef(
+        destinationRecordId, offset, destinationLayout.storedLength(), RecordRole.FILE);
+  }
+
   /** Forces all appended record bytes and metadata before any pointer slot may change. */
   public void forceAppendedRecords() throws IOException {
     if (state != State.APPENDED || finalAppendedRecord == null) {

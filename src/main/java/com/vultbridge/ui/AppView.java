@@ -8,6 +8,9 @@ import com.vultbridge.crypto.SensitiveBytes;
 import com.vultbridge.platform.FileDialogService;
 import com.vultbridge.platform.JavaFxFileDialogService;
 import com.vultbridge.service.BackgroundJobManager;
+import com.vultbridge.service.CompactionOutcome;
+import com.vultbridge.service.CompactionPreview;
+import com.vultbridge.service.CompactionResult;
 import com.vultbridge.service.JobCallbacks;
 import com.vultbridge.service.JobFailureCategory;
 import com.vultbridge.service.JobHandle;
@@ -17,6 +20,7 @@ import com.vultbridge.service.VaultService;
 import com.vultbridge.service.VaultSnapshot;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -61,7 +65,7 @@ public final class AppView extends BorderPane implements AutoCloseable {
     this.fileDialogs = java.util.Objects.requireNonNull(fileDialogs, "fileDialogs");
     this.backgroundJobs = java.util.Objects.requireNonNull(backgroundJobs, "backgroundJobs");
     this.vaultService = java.util.Objects.requireNonNull(vaultService, "vaultService");
-    compactionDialog = new CompactionConfirmationDialog(fileDialogs);
+    compactionDialog = new CompactionConfirmationDialog();
     getStyleClass().add("app-view");
     setTop(createHeader());
     stateMachine.addListener(this::render);
@@ -172,7 +176,50 @@ public final class AppView extends BorderPane implements AutoCloseable {
   }
 
   private void showCompaction(UnlockedVaultState vaultState) {
-    compactionDialog.show(getScene() == null ? null : getScene().getWindow(), vaultState);
+    Objects.requireNonNull(vaultState, "vaultState");
+    var owner = getScene() == null ? null : getScene().getWindow();
+    var destination = fileDialogs.chooseCompactionDirectory(owner);
+    if (destination.isEmpty()) {
+      return;
+    }
+
+    Path destinationDirectory = destination.orElseThrow();
+    stateMachine.beginOperation();
+    operationStatus.setText("Checking compaction space…");
+    submit(
+        context -> vaultService.previewCompaction(destinationDirectory),
+        preview -> confirmAndStartCompaction(destinationDirectory, preview),
+        false);
+  }
+
+  private void confirmAndStartCompaction(Path destinationDirectory, CompactionPreview preview) {
+    try {
+      boolean confirmed =
+          compactionDialog.show(
+              getScene() == null ? null : getScene().getWindow(), destinationDirectory, preview);
+      if (!confirmed) {
+        operationStatus.setText("");
+        stateMachine.failOperation();
+        return;
+      }
+      operationStatus.setText("Compacting and validating…");
+      submit(
+          context -> vaultService.compact(destinationDirectory, preview, context),
+          this::completeCompaction,
+          true);
+    } catch (RuntimeException exception) {
+      stateMachine.failOperation();
+      operationStatus.setText("Unable to start compaction.");
+    }
+  }
+
+  private void completeCompaction(CompactionResult result) {
+    var snapshot = result.resultingVault().orElseThrow();
+    stateMachine.completeVaultOperation(UnlockedVaultState.fromSnapshot(snapshot));
+    operationStatus.setText(
+        result.outcome() == CompactionOutcome.COMPLETED_SOURCE_REMOVED
+            ? "Compaction complete; the validated replacement is active."
+            : "Compaction succeeded; both encrypted vault files remain because source removal failed.");
   }
 
   private void createVault(Path path, SensitiveBytes passphrase) {

@@ -1,5 +1,6 @@
 package com.vultbridge.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -8,6 +9,7 @@ import com.vultbridge.vault.AuthenticatedHeaderSlot;
 import com.vultbridge.vault.HeaderSlotAuthenticator;
 import com.vultbridge.vault.UnverifiedHeaderSlot;
 import com.vultbridge.vault.VaultManifest;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -45,6 +47,17 @@ class VaultSessionMutationTest {
 
       assertSame(originalManifest, session.manifest());
       assertSame(originalSlot, session.activeSlot());
+    }
+  }
+
+  @Test
+  void retainsExactNormalizedSourcePathInsideTheServiceBoundary() throws Exception {
+    Path nestedDirectory = temporaryDirectory.resolve("nested");
+    Path relativePath = nestedDirectory.resolve("source.vltb");
+    Files.createDirectories(nestedDirectory);
+    try (var passphrase = passphrase();
+        var session = VaultCreator.create(relativePath, passphrase)) {
+      assertEquals(relativePath.toAbsolutePath().normalize(), session.vaultPath());
     }
   }
 

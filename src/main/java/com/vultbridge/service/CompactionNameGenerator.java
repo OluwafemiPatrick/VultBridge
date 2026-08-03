@@ -30,11 +30,7 @@ public final class CompactionNameGenerator {
     Objects.requireNonNull(timestamp, "timestamp");
     Objects.requireNonNull(randomSuffixSource, "randomSuffixSource");
 
-    String base =
-        vaultDisplayName.endsWith(".vltb")
-            ? vaultDisplayName.substring(0, vaultDisplayName.length() - ".vltb".length())
-            : vaultDisplayName;
-    base = PRIOR_COMPACTION_SUFFIX.matcher(base).replaceFirst("");
+    String base = baseName(vaultDisplayName);
     if (base.isBlank()) {
       throw new IllegalArgumentException("Vault display name must contain a base name");
     }
@@ -44,5 +40,21 @@ public final class CompactionNameGenerator {
       throw new IllegalArgumentException("Random suffix must fit in six hexadecimal characters");
     }
     return "%s-%s-%06x.vltb".formatted(base, TIMESTAMP.format(timestamp), suffix);
+  }
+
+  static boolean isGeneratedFor(String vaultDisplayName, String outputFileName) {
+    Objects.requireNonNull(vaultDisplayName, "vaultDisplayName");
+    Objects.requireNonNull(outputFileName, "outputFileName");
+    String base = baseName(vaultDisplayName);
+    return outputFileName.matches(
+        java.util.regex.Pattern.quote(base) + "-\\d{8}T\\d{6}Z-[0-9a-f]{6}\\.vltb");
+  }
+
+  private static String baseName(String vaultDisplayName) {
+    String base =
+        vaultDisplayName.endsWith(".vltb")
+            ? vaultDisplayName.substring(0, vaultDisplayName.length() - ".vltb".length())
+            : vaultDisplayName;
+    return PRIOR_COMPACTION_SUFFIX.matcher(base).replaceFirst("");
   }
 }

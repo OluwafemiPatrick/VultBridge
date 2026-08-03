@@ -12,6 +12,7 @@ AGENTS.md
 # Gradle
 .gradle/
 build/
+bin/
 
 # IDEs and editors
 .idea/

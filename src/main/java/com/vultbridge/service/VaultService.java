@@ -3,7 +3,11 @@ package com.vultbridge.service;
 import com.vultbridge.crypto.SensitiveBytes;
 import com.vultbridge.platform.VaultAccessException;
 import com.vultbridge.platform.VaultAlreadyOpenException;
+import com.vultbridge.vault.VaultDataException;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.SecureRandom;
 import java.util.List;
 import java.util.Objects;
 
@@ -15,7 +19,18 @@ import java.util.Objects;
  * except idempotent {@link #close()} after that worker has stopped.
  */
 public final class VaultService implements AutoCloseable {
+  private final SecureRandom compactionRandom = new SecureRandom();
+  private final CompactionSourceRemover sourceRemover;
   private VaultSession session;
+
+  /** Creates a service using normal filesystem deletion for validated source removal. */
+  public VaultService() {
+    this(Files::delete);
+  }
+
+  VaultService(CompactionSourceRemover sourceRemover) {
+    this.sourceRemover = Objects.requireNonNull(sourceRemover, "sourceRemover");
+  }
 
   /** Creates and retains a new unlocked vault session. */
   public VaultSnapshot create(Path path, SensitiveBytes passphrase) throws VaultOperationException {
@@ -78,6 +93,112 @@ public final class VaultService implements AutoCloseable {
     return current.snapshot();
   }
 
+  /**
+   * Captures the service-owned metadata boundary for a future compaction operation.
+   *
+   * <p>This method performs no candidate creation or vault mutation. It is package-private so the
+   * JavaFX layer cannot retain exact paths or an operation context; the eventual compaction job
+   * will be submitted through the application-owned background worker.
+   */
+  CompactionOperation prepareCompaction(Path destinationDirectory) throws VaultOperationException {
+    Objects.requireNonNull(destinationDirectory, "destinationDirectory");
+    try {
+      VaultSession current = requireOpen();
+      return CompactionOperation.initial(
+          current.vaultPath(), destinationDirectory, current.snapshot());
+    } catch (VaultOperationException exception) {
+      closeInvalidatedSession(exception);
+      throw exception;
+    }
+  }
+
+  /**
+   * Performs read-only compaction preflight and selects the exact output name shown for
+   * confirmation.
+   *
+   * <p>No candidate is created and no vault state is mutated. The selected name is used by the
+   * confirmed overload of {@link #compact(Path, CompactionPreview, VaultOperationControl)} so the
+   * UI never confirms one output name while the service silently writes another.
+   */
+  public CompactionPreview previewCompaction(Path destinationDirectory)
+      throws VaultOperationException {
+    CompactionOperation operation = prepareCompaction(destinationDirectory);
+    try {
+      CompactionStorageEstimate estimate = CompactionPreflight.inspect(operation);
+      CompactionPreflight.requireSufficientSpace(estimate);
+      String outputName =
+          CompactionPathPreparer.chooseOutputName(
+              operation, java.time.Instant.now(), () -> compactionRandom.nextInt(0x0100_0000));
+      return CompactionPreview.create(
+          operation.sourceSnapshot().vaultDisplayName(), outputName, estimate);
+    } catch (IOException | RuntimeException exception) {
+      throw new VaultOperationException(JobFailureCategory.FILESYSTEM);
+    }
+  }
+
+  /** Performs read-only compaction storage preflight without creating a candidate. */
+  CompactionStorageEstimate preflightCompaction(Path destinationDirectory)
+      throws VaultOperationException {
+    return previewCompaction(destinationDirectory).estimate();
+  }
+
+  /**
+   * Compacts the current vault into a validated timestamped replacement and removes the exact
+   * source path only after validation succeeds.
+   *
+   * <p>The operation is intended to run through the application-owned background worker. It owns no
+   * passphrase input, retains only the service session, and returns metadata-only terminal results.
+   * Cancellation and failures before source removal leave the source session usable.
+   */
+  public CompactionResult compact(Path destinationDirectory, VaultOperationControl control)
+      throws VaultOperationException, JobCancelledException {
+    return compactInternal(destinationDirectory, null, control);
+  }
+
+  /**
+   * Runs a confirmed compaction using the exact output name shown by {@link #previewCompaction}.
+   */
+  public CompactionResult compact(
+      Path destinationDirectory, CompactionPreview preview, VaultOperationControl control)
+      throws VaultOperationException, JobCancelledException {
+    Objects.requireNonNull(preview);
+    return compactInternal(destinationDirectory, preview.outputFileName(), control);
+  }
+
+  private CompactionResult compactInternal(
+      Path destinationDirectory, String confirmedOutputName, VaultOperationControl control)
+      throws VaultOperationException, JobCancelledException {
+    Objects.requireNonNull(destinationDirectory, "destinationDirectory");
+    Objects.requireNonNull(control, "control");
+    VaultSession source = requireOpen();
+    try {
+      CompactionOperation operation =
+          CompactionOperation.initial(source.vaultPath(), destinationDirectory, source.snapshot());
+      CompactionStorageEstimate estimate = CompactionPreflight.inspect(operation);
+      CompactionPreflight.requireSufficientSpace(estimate);
+      try (var prepared =
+          confirmedOutputName == null
+              ? CompactionPathPreparer.prepare(
+                  operation, java.time.Instant.now(), () -> compactionRandom.nextInt(0x0100_0000))
+              : CompactionPathPreparer.prepare(operation, confirmedOutputName)) {
+        VaultCompactor.CompactionBuild build =
+            VaultCompactor.build(source, prepared.operation(), prepared.candidate(), control);
+        VaultSnapshot validated =
+            VaultCompactor.publishAndValidate(source, prepared, build, control);
+        return installReplacementSession(source, prepared.candidate().finalPath(), validated);
+      }
+    } catch (JobCancelledException exception) {
+      throw exception;
+    } catch (VaultOperationException exception) {
+      closeInvalidatedSession(exception);
+      throw exception;
+    } catch (VaultDataException exception) {
+      throw new VaultOperationException(JobFailureCategory.SECURITY);
+    } catch (IOException | RuntimeException exception) {
+      throw new VaultOperationException(JobFailureCategory.FILESYSTEM);
+    }
+  }
+
   /** Returns current authenticated metadata after a preceding operation's terminal boundary. */
   public VaultSnapshot snapshot() throws VaultOperationException {
     try {
@@ -127,6 +248,53 @@ public final class VaultService implements AutoCloseable {
     if (failure.sessionInvalidated()) {
       close();
     }
+  }
+
+  private CompactionResult installReplacementSession(
+      VaultSession source, Path compactedPath, VaultSnapshot validated)
+      throws VaultOperationException {
+    byte[] expectedImmutableHeader = source.immutableHeader();
+    com.vultbridge.crypto.VaultKeySet transferredKeys = source.detachKeysForReplacement();
+    VaultSession replacement;
+    try {
+      replacement =
+          VaultUnlocker.openWithKeys(compactedPath, transferredKeys, expectedImmutableHeader);
+    } catch (VaultAlreadyOpenException exception) {
+      source.close();
+      session = null;
+      throw new VaultOperationException(JobFailureCategory.VAULT_ALREADY_OPEN);
+    } catch (VaultAccessException exception) {
+      source.close();
+      session = null;
+      throw new VaultOperationException(JobFailureCategory.FILESYSTEM);
+    } catch (UnableToUnlockVaultException exception) {
+      source.close();
+      session = null;
+      throw new VaultOperationException(JobFailureCategory.SECURITY);
+    } finally {
+      java.util.Arrays.fill(expectedImmutableHeader, (byte) 0);
+    }
+
+    Path sourcePath = source.vaultPath();
+    boolean sourceIdentityMatches = source.sourceIdentityMatches();
+    boolean sourceRemoved = false;
+    try {
+      // Release the source channel and sidecar lock before the normal unlink. Java has no portable
+      // conditional-unlink primitive, so the identity check plus deletion is deliberately not
+      // described as atomic or secure erasure; preserving data is preferred if identity is lost.
+      source.close();
+      if (sourceIdentityMatches) {
+        try {
+          sourceRemover.remove(sourcePath);
+          sourceRemoved = true;
+        } catch (IOException | SecurityException ignored) {
+          // A validated replacement is still successful when source removal cannot complete.
+        }
+      }
+    } finally {
+      session = replacement;
+    }
+    return CompactionResult.completed(sourceRemoved, validated);
   }
 
   private void requireClosed() {

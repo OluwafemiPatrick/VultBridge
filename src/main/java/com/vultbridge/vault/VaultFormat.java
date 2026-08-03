@@ -31,6 +31,9 @@ public final class VaultFormat {
   public static final int MAXIMUM_MANIFEST_PLAINTEXT_BYTES = 16 * 1024 * 1024;
   public static final int MAXIMUM_COMMIT_PLAINTEXT_BYTES = 64 * 1024;
   public static final int MAXIMUM_DISPLAY_NAME_UTF8_BYTES = 1024;
+  // A one-chunk preflight margin absorbs small provider/filesystem accounting changes without
+  // pretending that usable-space reporting can guarantee a later write will not fill the drive.
+  public static final long COMPACTION_SAFETY_MARGIN_BYTES = FILE_CHUNK_PLAINTEXT_BYTES;
 
   public static final int ARGON2_CREATE_MEMORY_KIB = 65_536;
   public static final int ARGON2_CREATE_ITERATIONS = 3;

@@ -27,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.Objects;
 
@@ -67,8 +68,15 @@ public final class VaultCreator {
               StandardOpenOption.READ,
               StandardOpenOption.WRITE,
               LinkOption.NOFOLLOW_LINKS);
+      BasicFileAttributes attributes =
+          Files.readAttributes(vaultPath, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+      if (attributes.fileKey() == null) {
+        throw new IOException("Vault file identity is unavailable");
+      }
       writeInitialState(channel, passphrase);
-      VaultSession session = VaultUnlocker.openHeld(channel, sidecar, passphrase, vaultDisplayName);
+      VaultSession session =
+          VaultUnlocker.openHeld(
+              channel, sidecar, passphrase, vaultDisplayName, vaultPath, attributes.fileKey());
       transferred = true;
       return session;
     } catch (IOException | RuntimeException exception) {

@@ -41,6 +41,68 @@ public final class FileRecordReader {
     Objects.requireNonNull(destination, "destination");
     Objects.requireNonNull(cancellationRequested, "cancellationRequested");
 
+    FileRecordLayout layout = FileRecordLayout.forLogicalSize(entry.logicalSize());
+    final long[] outputOffset = {0};
+    streamChunks(
+        vault,
+        keys,
+        entry,
+        authenticatedCommitEnd,
+        cancellationRequested,
+        (chunkIndex, plaintext, plaintextLength) -> {
+          writeFully(destination, ByteBuffer.wrap(plaintext, 0, plaintextLength), outputOffset[0]);
+          outputOffset[0] = Math.addExact(outputOffset[0], plaintextLength);
+        });
+    if (outputOffset[0] != layout.logicalSize()) {
+      throw new VaultDataException();
+    }
+    return outputOffset[0];
+  }
+
+  /** Authenticates every chunk of one FILE record without retaining or publishing plaintext. */
+  public static long verify(
+      FileChannel vault,
+      VaultKeySet keys,
+      ManifestEntry entry,
+      long authenticatedCommitEnd,
+      BooleanSupplier cancellationRequested)
+      throws IOException, VaultDataException {
+    FileRecordLayout layout = FileRecordLayout.forLogicalSize(entry.logicalSize());
+    final long[] verifiedBytes = {0};
+    streamChunks(
+        vault,
+        keys,
+        entry,
+        authenticatedCommitEnd,
+        cancellationRequested,
+        (chunkIndex, plaintext, plaintextLength) -> {
+          verifiedBytes[0] = Math.addExact(verifiedBytes[0], plaintextLength);
+        });
+    if (verifiedBytes[0] != layout.logicalSize()) {
+      throw new VaultDataException();
+    }
+    return verifiedBytes[0];
+  }
+
+  /**
+   * Authenticates each FILE chunk and passes one wiped borrowed plaintext buffer to a package-local
+   * consumer. This is the bounded-memory bridge used when compacting one authenticated vault into
+   * another; the consumer must finish synchronously and must not retain the buffer.
+   */
+  static void streamChunks(
+      FileChannel vault,
+      VaultKeySet keys,
+      ManifestEntry entry,
+      long authenticatedCommitEnd,
+      BooleanSupplier cancellationRequested,
+      PlaintextChunkConsumer consumer)
+      throws IOException, VaultDataException {
+    Objects.requireNonNull(vault, "vault");
+    Objects.requireNonNull(keys, "keys");
+    Objects.requireNonNull(entry, "entry");
+    Objects.requireNonNull(cancellationRequested, "cancellationRequested");
+    Objects.requireNonNull(consumer, "consumer");
+
     RecordRef reference = entry.fileRef();
     FileRecordLayout layout = FileRecordLayout.forLogicalSize(entry.logicalSize());
     if (reference.expectedRole() != RecordRole.FILE
@@ -50,7 +112,6 @@ public final class FileRecordReader {
     }
     RecordFrameCodec.readVerifiedHeader(vault, reference, authenticatedCommitEnd);
 
-    long outputOffset = 0;
     for (long chunkIndex = 0; chunkIndex < layout.chunkCount(); chunkIndex++) {
       if (cancellationRequested.getAsBoolean()) {
         throw new CancellationException();
@@ -67,17 +128,12 @@ public final class FileRecordReader {
               keys, reference.recordId(), layout, chunkIndex, encrypted)) {
         byte[] copy = plaintext.copy();
         try {
-          writeFully(destination, ByteBuffer.wrap(copy), outputOffset);
+          consumer.accept(chunkIndex, copy, plaintextLength);
         } finally {
           Arrays.fill(copy, (byte) 0);
         }
       }
-      outputOffset = Math.addExact(outputOffset, plaintextLength);
     }
-    if (outputOffset != layout.logicalSize()) {
-      throw new VaultDataException();
-    }
-    return outputOffset;
   }
 
   private static byte[] readExact(FileChannel channel, long offset, int length)
@@ -93,6 +149,11 @@ public final class FileRecordReader {
       position = Math.addExact(position, read);
     }
     return bytes;
+  }
+
+  @FunctionalInterface
+  interface PlaintextChunkConsumer {
+    void accept(long chunkIndex, byte[] plaintext, int plaintextLength) throws IOException;
   }
 
   private static void writeFully(FileChannel channel, ByteBuffer source, long offset)

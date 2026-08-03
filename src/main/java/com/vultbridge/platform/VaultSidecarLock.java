@@ -103,7 +103,7 @@ public final class VaultSidecarLock implements AutoCloseable {
   }
 
   /** Returns whether a filesystem type is in the exact currently verified local-storage matrix. */
-  static boolean isSupportedFileStoreType(String type) {
+  public static boolean isSupportedFileStoreType(String type) {
     return type != null && SUPPORTED_FILESTORE_TYPES.contains(type.toLowerCase(Locale.ROOT));
   }
 

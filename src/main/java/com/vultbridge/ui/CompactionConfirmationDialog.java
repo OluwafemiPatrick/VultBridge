@@ -1,9 +1,7 @@
 package com.vultbridge.ui;
 
-import com.vultbridge.platform.FileDialogService;
-import com.vultbridge.service.CompactionNameGenerator;
-import java.security.SecureRandom;
-import java.time.Instant;
+import com.vultbridge.service.CompactionPreview;
+import java.nio.file.Path;
 import java.util.Objects;
 import javafx.geometry.Insets;
 import javafx.scene.control.ButtonBar;
@@ -15,27 +13,21 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 
 /**
- * Previews the confirmation contract for the destructive Compact &amp; Replace workflow.
+ * Presents the confirmation contract for the destructive Compact &amp; Replace workflow.
  *
- * <p>The dialog makes the candidate name, estimated space requirement, destination, and
- * validate-before-delete guarantee explicit. Its start action remains disabled until Phase 5
- * connects the service that can enforce those guarantees.
+ * <p>The dialog is metadata-only: the service has already performed read-only preflight, and this
+ * class only displays its result and returns whether the user explicitly confirmed. It never
+ * creates, reads, moves, or deletes a filesystem path.
  */
 public final class CompactionConfirmationDialog {
-  private final FileDialogService fileDialogs;
-  private final SecureRandom random = new SecureRandom();
+  /** Creates the metadata-only confirmation dialog controller. */
+  public CompactionConfirmationDialog() {}
 
-  /** Creates a dialog controller using a path-selection-only filesystem boundary. */
-  public CompactionConfirmationDialog(FileDialogService fileDialogs) {
-    this.fileDialogs = Objects.requireNonNull(fileDialogs, "fileDialogs");
-  }
-
-  /** Displays compaction details for the supplied metadata-only vault snapshot. */
-  public void show(Window owner, UnlockedVaultState vaultState) {
-    Objects.requireNonNull(vaultState, "vaultState");
-    String outputName =
-        CompactionNameGenerator.generate(
-            vaultState.vaultDisplayName(), Instant.now(), () -> random.nextInt(0x0100_0000));
+  /** Displays the preflight result and returns {@code true} only after explicit confirmation. */
+  public boolean show(Window owner, Path destinationDirectory, CompactionPreview preview) {
+    Objects.requireNonNull(destinationDirectory, "destinationDirectory");
+    Objects.requireNonNull(preview, "preview");
+    var estimate = preview.estimate();
 
     var dialog = new Dialog<ButtonType>();
     dialog.setTitle("Compact & Replace");
@@ -44,35 +36,39 @@ public final class CompactionConfirmationDialog {
       dialog.initOwner(owner);
     }
 
-    var destination = new Label("Choose a destination directory");
+    var destination = new Label(destinationDirectory.toString());
     destination.setWrapText(true);
-    var availableSpace = new Label("Checked after the destination is chosen");
-    var chooseButton = new javafx.scene.control.Button("Choose destination…");
-    chooseButton.setOnAction(
-        event ->
-            fileDialogs
-                .chooseCompactionDirectory(owner)
-                .ifPresent(
-                    selected -> {
-                      destination.setText(selected.resolve(outputName).toString());
-                      availableSpace.setText("Available space will be checked before writing.");
-                    }));
 
     var details = new GridPane();
     details.getStyleClass().add("dialog-details");
     details.setHgap(14);
     details.setVgap(7);
-    addDetail(details, 0, "Replacement filename", outputName);
+    addDetail(details, 0, "Replacement filename", preview.outputFileName());
     addDetail(
         details,
         1,
+        "Current vault size",
+        ByteSizeFormatter.format(estimate.sourcePhysicalVaultBytes()));
+    addDetail(
+        details, 2, "Live file data", ByteSizeFormatter.format(estimate.liveLogicalFileBytes()));
+    addDetail(
+        details,
+        3,
+        "Estimated replacement",
+        ByteSizeFormatter.format(estimate.estimatedCandidateBytes()));
+    addDetail(details, 4, "Safety margin", ByteSizeFormatter.format(estimate.safetyMarginBytes()));
+    addDetail(
+        details,
+        5,
         "Required free space",
-        "%s plus a safety margin"
-            .formatted(ByteSizeFormatter.format(vaultState.physicalVaultBytes())));
-    details.add(new Label("Destination"), 0, 2);
-    details.add(destination, 1, 2);
-    details.add(new Label("Available space"), 0, 3);
-    details.add(availableSpace, 1, 3);
+        ByteSizeFormatter.format(estimate.requiredDestinationBytes()));
+    details.add(new Label("Destination"), 0, 6);
+    details.add(destination, 1, 6);
+    addDetail(
+        details,
+        7,
+        "Available space (hint)",
+        ByteSizeFormatter.format(estimate.usableDestinationBytes()));
 
     var warningTitle =
         new Label("The current vault is deleted only after the replacement validates.");
@@ -88,21 +84,18 @@ public final class CompactionConfirmationDialog {
     var warning = new VBox(4, warningTitle, warningText);
     warning.getStyleClass().add("warning-panel");
 
-    var content = new VBox(12, details, chooseButton, warning);
+    var content = new VBox(12, details, warning);
     content.setPadding(new Insets(4));
     content.setPrefWidth(540);
     dialog.getDialogPane().setContent(content);
 
-    // The confirmation is intentionally informative until the verified Phase 5 service owns the
-    // exact displayed destination and can enforce validation-before-removal.
     var startType = new ButtonType("Start compaction", ButtonBar.ButtonData.OK_DONE);
     dialog.getDialogPane().getButtonTypes().addAll(ButtonType.CANCEL, startType);
-    dialog.getDialogPane().lookupButton(startType).setDisable(true);
     dialog
         .getDialogPane()
         .lookupButton(startType)
-        .setAccessibleHelp("Compaction becomes available after the Phase 5 service is connected.");
-    dialog.showAndWait();
+        .setAccessibleHelp("Create, validate, and activate the encrypted replacement vault.");
+    return dialog.showAndWait().filter(startType::equals).isPresent();
   }
 
   private static void addDetail(GridPane details, int row, String labelText, String valueText) {

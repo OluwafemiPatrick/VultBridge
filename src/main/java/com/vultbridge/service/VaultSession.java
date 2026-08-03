@@ -7,6 +7,11 @@ import com.vultbridge.vault.RecordIdGenerator;
 import com.vultbridge.vault.VaultManifest;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -19,9 +24,12 @@ import java.util.Objects;
  */
 public final class VaultSession implements AutoCloseable {
   private final FileChannel channel;
+  private final Path vaultPath;
   private final String vaultDisplayName;
   private final VaultSidecarLock sidecarLock;
-  private final VaultKeySet keys;
+  private final byte[] immutableHeader;
+  private VaultKeySet keys;
+  private final Object vaultFileKey;
   private final RecordIdGenerator recordIds;
   private AuthenticatedHeaderSlot activeSlot;
   private VaultManifest manifest;
@@ -33,13 +41,21 @@ public final class VaultSession implements AutoCloseable {
       VaultKeySet keys,
       VaultManifest manifest,
       AuthenticatedHeaderSlot activeSlot,
-      String vaultDisplayName) {
+      byte[] immutableHeader,
+      String vaultDisplayName,
+      Path vaultPath,
+      Object vaultFileKey) {
     this.channel = Objects.requireNonNull(channel, "channel");
     this.sidecarLock = Objects.requireNonNull(sidecarLock, "sidecarLock");
     this.keys = Objects.requireNonNull(keys, "keys");
     this.manifest = Objects.requireNonNull(manifest, "manifest");
     this.activeSlot = Objects.requireNonNull(activeSlot, "activeSlot");
+    this.immutableHeader =
+        Arrays.copyOf(
+            Objects.requireNonNull(immutableHeader, "immutableHeader"), immutableHeader.length);
     this.vaultDisplayName = Objects.requireNonNull(vaultDisplayName, "vaultDisplayName");
+    this.vaultPath = Objects.requireNonNull(vaultPath, "vaultPath").toAbsolutePath().normalize();
+    this.vaultFileKey = Objects.requireNonNull(vaultFileKey, "vaultFileKey");
     if (vaultDisplayName.isBlank()) {
       throw new IllegalArgumentException("Vault display name must not be blank");
     }
@@ -56,6 +72,43 @@ public final class VaultSession implements AutoCloseable {
   public String vaultDisplayName() {
     ensureOpen();
     return vaultDisplayName;
+  }
+
+  /**
+   * Returns the exact normalized absolute path retained for this session's vault file.
+   *
+   * <p>This path is available only inside the service boundary. It is never copied into {@link
+   * VaultSnapshot} or application UI state, and it must be used directly for any future source
+   * operation rather than rediscovering a file by name.
+   */
+  Path vaultPath() {
+    ensureOpen();
+    return vaultPath;
+  }
+
+  /** Returns whether the retained source path still identifies this session's opened inode. */
+  boolean sourceIdentityMatches() {
+    ensureOpen();
+    try {
+      BasicFileAttributes attributes =
+          Files.readAttributes(vaultPath, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+      return attributes.isRegularFile()
+          && !attributes.isSymbolicLink()
+          && vaultFileKey.equals(attributes.fileKey());
+    } catch (IOException | SecurityException exception) {
+      return false;
+    }
+  }
+
+  /** Transfers key ownership to a replacement session after the source has been validated. */
+  VaultKeySet detachKeysForReplacement() {
+    ensureOpen();
+    if (keys == null) {
+      throw new IllegalStateException("Session keys have already been transferred");
+    }
+    VaultKeySet transferred = keys;
+    keys = null;
+    return transferred;
   }
 
   /** Returns a fresh authenticated metadata snapshot including the current physical file size. */
@@ -81,6 +134,12 @@ public final class VaultSession implements AutoCloseable {
   VaultKeySet keys() {
     ensureOpen();
     return keys;
+  }
+
+  /** Returns a defensive copy of the authenticated immutable fixed-header bytes. */
+  byte[] immutableHeader() {
+    ensureOpen();
+    return Arrays.copyOf(immutableHeader, immutableHeader.length);
   }
 
   RecordIdGenerator recordIds() {
@@ -128,7 +187,11 @@ public final class VaultSession implements AutoCloseable {
     }
     closed = true;
     manifest = null;
-    keys.close();
+    Arrays.fill(immutableHeader, (byte) 0);
+    if (keys != null) {
+      keys.close();
+      keys = null;
+    }
     try {
       channel.close();
     } catch (IOException ignored) {

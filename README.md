@@ -4,19 +4,6 @@ VultBridge is a local Java desktop application for keeping files in a portable, 
 encrypted vault. A vault is one `.vltb` file protected by a user-chosen passphrase; VultBridge has
 no account system, server dependency, recovery key, or passphrase-recovery service.
 
-## Project status
-
-VultBridge is under active MVP development and is not ready for production use.
-
-Phases 1–4 are implemented and have completed their quality and adversarial-review gates. The
-application supports the complete pre-compaction workflow end to end: create, authenticated unlock,
-regular-file import, persisted flat listing, logical deletion, explicit authenticated export, lock,
-reopen, and manual closed-vault backup. File content uses bounded streaming.
-
-The codebase is ready to begin Phase 5. Compact & Replace remains unavailable until its candidate
-creation, storage preflight, validation-before-removal, cancellation, and storage-failure behavior
-have been implemented and verified.
-
 ## MVP scope
 
 The MVP is intentionally narrow:
@@ -48,28 +35,7 @@ recovered.
 VultBridge protects a locked vault from offline content disclosure and undetected modification. It
 does not protect plaintext or passphrases on a compromised host while the vault is unlocked. The
 host can observe the vault filename, total physical size, host timestamps, and update timing. V1
-also exposes imported-file sizes through public record framing. Rollback to an older complete valid
-vault copy is not detected, and deletion does not promise secure physical erasure.
-
-## Vault and filesystem rules
-
-- Service operations accept only filenames with a non-empty base and the exact lowercase `.vltb`
-  extension.
-- Existing destinations and symbolic links are never overwritten or followed during creation.
-- A persistent same-directory `<vault filename>.lock` file prevents cooperating VultBridge
-  processes from opening the same vault concurrently.
-- The lock file remains after close; deleting it during normal cleanup would create an inode race.
-- Filesystem support fails closed. Phase 3 is verified on macOS 26.5.2 with APFS, so APFS is the
-  only currently enabled filesystem type.
-- Linux filesystems and removable media remain subject to the Phase 6 release-verification matrix.
-- Network filesystems are unsupported.
-- A failed creation may leave an incomplete `.vltb` file for manual removal. VultBridge does not
-  automatically delete an uncertain pathname because Java cannot bind that deletion atomically to
-  the file created by the failed operation.
-- Export writes owner-only plaintext to a random create-new temporary file beside the destination,
-  authenticates every vault chunk before writing it, forces and closes it, and publishes without
-  overwrite. Failed or cancelled exports remove their temporary output where its captured APFS
-  identity can still be established.
+also exposes imported-file sizes through public record framing.
 
 ## Requirements
 
@@ -143,10 +109,3 @@ After an intentional dependency change, regenerate locks and review the resultin
 
 Do not add or upgrade a runtime dependency without reviewing its maintenance status, license,
 security advisories, transitive changes, and lockfile changes.
-
-## Engineering expectations
-
-Persistent-format and security changes require byte-exact fixtures, boundary and malformed-input
-tests, failure-path cleanup tests, static analysis, and adversarial review. A passing build is a
-required baseline, not proof that the software is free of security defects; independent human
-review remains required before release.
