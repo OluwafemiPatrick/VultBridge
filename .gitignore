@@ -1,6 +1,7 @@
 docs/
 memory/
 mockup/
+test_files/
 z_*.md
 AGENTS.md
 .gitignore
