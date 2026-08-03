@@ -1,5 +1,0 @@
-I am a product-minded software engineer with experience building backend services, cloud-connected systems, data platforms, and applied AI features. 
-
-I’m especially drawn to problems that need both careful engineering and practical product thinking: making systems easier to maintain, improving reliability, and helping teams move from an idea to something dependable in production. Simply put, I turn complex ideas into reliable products people can actually use. 
-
-I work across reliable integrations, transactional workflows, and production delivery.
