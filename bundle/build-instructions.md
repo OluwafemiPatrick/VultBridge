@@ -54,6 +54,8 @@ sh release/verify-release.sh \
 It checks the exact OS archive set, version, architecture, status, source revision format, archive
 hashes and sizes, symlink exclusion, and unexpected-file rejection. Inspect the app image while it
 still exists under `build/release/app-image` and run the exact archive on a clean supported machine.
+When verifying from the source checkout, bind the manifest to the build commit explicitly with
+`VULTBRIDGE_EXPECTED_SOURCE_REVISION="$(git rev-parse HEAD)"`.
 
 ## Explicitly promote a reviewed release
 
