@@ -1,7 +1,5 @@
 memory/
 docs/
-mockup/
-test_files/
 z_*.md
 AGENTS.md
 .gitignore

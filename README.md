@@ -87,7 +87,7 @@ Generated app images, archives, and manifests are written under `build/release/`
 bundles are under `bundle/`; build, verification, and promotion steps are in
 [`bundle/build-instructions.md`](bundle/build-instructions.md). The project uses Spotless, JUnit,
 Error Prone, SpotBugs, dependency locking, and OWASP Dependency-Check as quality controls. The
-dependency inventory is recorded in [`docs/dependency-licenses.md`](docs/dependency-licenses.md).
+dependency inventory is recorded in [`dependency-licenses.md`](dependency-licenses.md).
 
 Current bundle targets are x86_64 macOS and Linux. Runtime filesystem verification currently covers
 local APFS on macOS and local ext4 on Ubuntu; network, removable, and other unverified filesystems
@@ -95,8 +95,8 @@ are outside the supported boundary.
 
 ## Screenshots
 
-![Welcome screen](https://drive.google.com/file/d/1zO2beu1nCjcPZmWSAem7EhO1k3xiQ5pa/view?usp=drive_link)
+![Welcome screen](https://drive.google.com/uc?export=view&id=1zO2beu1nCjcPZmWSAem7EhO1k3xiQ5pa)
 
-![Vault creation screen](https://drive.google.com/file/d/1uCVpvYYjGn3JWOJCamWO5bGFp-G5O4ts/view?usp=drive_link)
+![Vault creation screen](https://drive.google.com/uc?export=view&id=1uCVpvYYjGn3JWOJCamWO5bGFp-G5O4ts)
 
-![Unlocked vault screen](https://drive.google.com/file/d/1wne3XwQqXFhRX7ZRCorc-L9rTlbC9dgg/view?usp=drive_link)
+![Unlocked vault screen](https://drive.google.com/uc?export=view&id=1wne3XwQqXFhRX7ZRCorc-L9rTlbC9dgg)

@@ -311,7 +311,7 @@ tasks.register<VerifyReleaseDependenciesTask>("verifyReleaseDependencies") {
     buildScript.set(layout.projectDirectory.file("build.gradle.kts"))
     dependencyLock.set(layout.projectDirectory.file("gradle.lockfile"))
     settingsDependencyLock.set(layout.projectDirectory.file("settings-gradle.lockfile"))
-    licenseReview.set(layout.projectDirectory.file("docs/dependency-licenses.md"))
+    licenseReview.set(layout.projectDirectory.file("dependency-licenses.md"))
     packageContent.set(layout.projectDirectory.dir("release/package-content"))
     runtimeClasspath.from(configurations.runtimeClasspath)
 }
