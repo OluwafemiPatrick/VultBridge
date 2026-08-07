@@ -13,7 +13,6 @@ import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -28,8 +27,10 @@ import javafx.scene.layout.VBox;
  * visible password controls are cleared on every path.
  */
 public final class CreateVaultView extends VBox implements SensitiveView {
-  private final PasswordField passphraseField = new PasswordField();
-  private final PasswordField confirmationField = new PasswordField();
+  private final PasswordVisibilityField passphraseField =
+      new PasswordVisibilityField("new-passphrase", PassphraseRules.requirementDescription());
+  private final PasswordVisibilityField confirmationField =
+      new PasswordVisibilityField("confirm-passphrase", "Enter the passphrase again");
   private final CheckBox acknowledgement =
       new CheckBox("I understand there is no recovery option.");
   private final Label message = new Label();
@@ -70,11 +71,6 @@ public final class CreateVaultView extends VBox implements SensitiveView {
     chooseButton.setOnAction(event -> chooseVaultPath());
     var pathRow = new HBox(8, pathField, chooseButton);
     HBox.setHgrow(pathField, Priority.ALWAYS);
-
-    passphraseField.setPromptText(PassphraseRules.requirementDescription());
-    passphraseField.setId("new-passphrase");
-    confirmationField.setPromptText("Enter the passphrase again");
-    confirmationField.setId("confirm-passphrase");
 
     var fields = new GridPane();
     fields.setHgap(10);

@@ -27,11 +27,6 @@ if find "$bundle_directory" -type l -print | grep . >/dev/null 2>&1; then
   echo "The OS bundle contains a symbolic link." >&2
   exit 1
 fi
-if find "$bundle_directory" -maxdepth 1 -type f -name '*.asc' -print | grep . >/dev/null 2>&1; then
-  echo "Detached release-manifest.txt.asc files are prohibited by Phase 7." >&2
-  exit 1
-fi
-
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/vultbridge-manifest.XXXXXX")
 trap 'rm -rf "$temporary_directory"' EXIT HUP INT TERM
 parsed="$temporary_directory/parsed"

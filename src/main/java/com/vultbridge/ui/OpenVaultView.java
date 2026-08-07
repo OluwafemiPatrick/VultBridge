@@ -12,7 +12,6 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -26,7 +25,8 @@ import javafx.scene.layout.VBox;
  * password control are cleared on every path.
  */
 public final class OpenVaultView extends VBox implements SensitiveView {
-  private final PasswordField passphraseField = new PasswordField();
+  private final PasswordVisibilityField passphraseField =
+      new PasswordVisibilityField("existing-passphrase", "Enter the vault passphrase");
   private final Label message = new Label();
   private final Runnable cancelAction;
   private final FileDialogService fileDialogs;
@@ -69,9 +69,6 @@ public final class OpenVaultView extends VBox implements SensitiveView {
 
     var passphraseLabel = new Label("Passphrase");
     passphraseLabel.setLabelFor(passphraseField);
-    passphraseField.setPromptText("Enter the vault passphrase");
-    passphraseField.setId("existing-passphrase");
-
     message.getStyleClass().add("form-message");
     message.setWrapText(true);
 

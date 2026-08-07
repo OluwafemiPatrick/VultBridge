@@ -26,6 +26,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -45,6 +46,7 @@ public final class AppView extends BorderPane implements AutoCloseable {
   private final VaultService vaultService;
   private final Label securityState = new Label();
   private final Label operationStatus = new Label();
+  private final ProgressIndicator operationProgress = new ProgressIndicator();
   private JobHandle activeJob;
   private boolean lockRequested;
   private boolean closed;
@@ -76,7 +78,14 @@ public final class AppView extends BorderPane implements AutoCloseable {
     var brand = new Label("VultBridge");
     brand.getStyleClass().add("brand");
     operationStatus.setId("operation-status");
-    var header = new HBox(12, brand, operationStatus, securityState);
+    operationProgress.setId("operation-progress");
+    operationProgress.setProgress(ProgressIndicator.INDETERMINATE_PROGRESS);
+    operationProgress.setPrefSize(18, 18);
+    operationProgress.setMinSize(18, 18);
+    operationProgress.setMaxSize(18, 18);
+    operationProgress.setVisible(false);
+    operationProgress.setManaged(false);
+    var header = new HBox(12, brand, operationStatus, operationProgress, securityState);
     header.getStyleClass().add("app-header");
     header.setAlignment(Pos.CENTER_LEFT);
     header.setPadding(new Insets(0, 20, 0, 20));
@@ -97,6 +106,10 @@ public final class AppView extends BorderPane implements AutoCloseable {
             state.sessionState() == VaultSessionState.UNLOCKED
                 ? "security-state-unlocked"
                 : "security-state");
+
+    boolean busy = state.jobState() == JobState.BUSY;
+    operationProgress.setVisible(busy);
+    operationProgress.setManaged(busy);
 
     // Setup forms remain inert while create/open runs. The unlocked view disables every conflicting
     // action itself but deliberately keeps Lock available as the active-job cancellation path.

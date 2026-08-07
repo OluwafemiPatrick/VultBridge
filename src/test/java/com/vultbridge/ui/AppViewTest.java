@@ -23,7 +23,9 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.PasswordField;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TableView;
+import javafx.scene.control.TextField;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import org.junit.jupiter.api.AfterEach;
@@ -80,6 +82,25 @@ class AppViewTest {
     fire(robot, "#open-vault-button");
     var passphrase = robot.lookup("#existing-passphrase").queryAs(PasswordField.class);
     assertEquals("", passphrase.getText());
+  }
+
+  @Test
+  void togglesOpenPassphraseVisibilityWithoutChangingItsValue(FxRobot robot) {
+    fire(robot, "#open-vault-button");
+    PasswordField masked = robot.lookup("#existing-passphrase").queryAs(PasswordField.class);
+    TextField revealed = robot.lookup("#existing-passphrase-visible").queryAs(TextField.class);
+    Button toggle = robot.lookup("#existing-passphrase-visibility-toggle").queryAs(Button.class);
+    robot.interact(() -> masked.setText("temporary secret"));
+
+    assertFalse(revealed.isVisible());
+    fire(robot, "#existing-passphrase-visibility-toggle");
+    assertTrue(revealed.isVisible());
+    assertEquals("temporary secret", revealed.getText());
+    assertEquals("Hide passphrase", toggle.getAccessibleText());
+
+    fire(robot, "#existing-passphrase-visibility-toggle");
+    assertFalse(revealed.isVisible());
+    assertEquals("temporary secret", masked.getText());
   }
 
   @Test
@@ -174,7 +195,8 @@ class AppViewTest {
           }
           var lock = robot.lookup("#lock-vault-button").queryAs(Button.class);
           var importButton = robot.lookup("#import-files-button").queryAs(Button.class);
-          return !lock.isDisabled() && importButton.isDisabled();
+          var progress = robot.lookup("#operation-progress").queryAs(ProgressIndicator.class);
+          return !lock.isDisabled() && importButton.isDisabled() && progress.isVisible();
         });
     assertFalse(robot.lookup("#lock-vault-button").queryAs(Button.class).isDisabled());
 

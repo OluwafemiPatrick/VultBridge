@@ -93,10 +93,15 @@ Current bundle targets are x86_64 macOS and Linux. Runtime filesystem verificati
 local APFS on macOS and local ext4 on Ubuntu; network, removable, and other unverified filesystems
 are outside the supported boundary.
 
+## License
+
+VultBridge's original source is licensed under the [MIT License](LICENSE). Bundled dependencies
+remain under their respective licenses; see the dependency inventory and package notices.
+
 ## Screenshots
 
-![Welcome screen](https://drive.google.com/uc?export=view&id=1zO2beu1nCjcPZmWSAem7EhO1k3xiQ5pa)
+![Welcome screen](assets/welcome-screen.png)
 
-![Vault creation screen](https://drive.google.com/uc?export=view&id=1uCVpvYYjGn3JWOJCamWO5bGFp-G5O4ts)
+![Vault creation screen](assets/vault-creation-screen.png)
 
-![Unlocked vault screen](https://drive.google.com/uc?export=view&id=1wne3XwQqXFhRX7ZRCorc-L9rTlbC9dgg)
+![Unlocked vault screen](assets/unlocked-vault-screen.png)

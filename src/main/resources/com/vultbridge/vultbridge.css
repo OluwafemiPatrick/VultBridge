@@ -94,6 +94,20 @@
     -fx-pref-height: 35px;
 }
 
+.password-visibility-toggle {
+    -fx-min-width: 30px;
+    -fx-pref-width: 30px;
+    -fx-min-height: 30px;
+    -fx-pref-height: 30px;
+    -fx-padding: 0;
+    -fx-background-color: transparent;
+}
+
+.password-visibility-toggle:hover,
+.password-visibility-toggle:focused {
+    -fx-background-color: #eef3f0;
+}
+
 .form-view .label {
     -fx-font-size: 12px;
 }
