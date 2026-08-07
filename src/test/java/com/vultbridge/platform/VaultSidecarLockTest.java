@@ -45,11 +45,13 @@ class VaultSidecarLockTest {
   }
 
   @Test
-  void filesystemPolicyAcceptsOnlyTheCurrentlyVerifiedType() {
+  void filesystemPolicyAcceptsOnlyTheCurrentlyVerifiedLocalTypes() {
     assertTrue(VaultSidecarLock.isSupportedFileStoreType("apfs"));
     assertTrue(VaultSidecarLock.isSupportedFileStoreType("APFS"));
+    assertTrue(VaultSidecarLock.isSupportedFileStoreType("ext4"));
+    assertTrue(VaultSidecarLock.isSupportedFileStoreType("EXT4"));
     for (String unsupported :
-        java.util.List.of("ext4", "nfs", "smbfs", "webdav", "fuse", "fuse.vendor")) {
+        java.util.List.of("overlay", "nfs", "smbfs", "webdav", "fuse", "fuse.vendor")) {
       assertFalse(VaultSidecarLock.isSupportedFileStoreType(unsupported));
     }
     assertFalse(VaultSidecarLock.isSupportedFileStoreType(null));

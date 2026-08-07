@@ -40,7 +40,9 @@ also exposes imported-file sizes through public record framing.
 ## Requirements
 
 - JDK 21
-- macOS with APFS for the currently verified development path
+- macOS 26.5.2 on local APFS, or Ubuntu 22.04.5 LTS on local ext4 for the current tested paths
+- Linux overlay/virtiofs, network filesystems, removable media, and other unverified filesystem
+  types remain rejected by the runtime
 
 The committed Gradle Wrapper provides the pinned Gradle version; a separate Gradle installation is
 not required.

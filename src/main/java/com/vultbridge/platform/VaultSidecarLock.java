@@ -24,7 +24,7 @@ import java.util.Set;
  * already acquired the persistent lock file.
  */
 public final class VaultSidecarLock implements AutoCloseable {
-  private static final Set<String> SUPPORTED_FILESTORE_TYPES = Set.of("apfs");
+  private static final Set<String> SUPPORTED_FILESTORE_TYPES = Set.of("apfs", "ext4");
 
   private final FileChannel channel;
   private final FileLock lock;
