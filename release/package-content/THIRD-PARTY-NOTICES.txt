@@ -10,5 +10,5 @@ file:
 - `licenses/Bouncy-Castle-License.txt`
 
 The runtime dependency versions and their legal-source mapping are recorded in
-`docs/release/dependency-licenses.md`. A release is incomplete unless this notice and the complete
+`docs/dependency-licenses.md`. A release is incomplete unless this notice and the complete
 `licenses/` directory are present in the application image.

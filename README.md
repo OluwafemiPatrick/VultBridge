@@ -1,129 +1,102 @@
 # VultBridge
 
-VultBridge is a local Java desktop application for keeping files in a portable, authenticated,
-encrypted vault. A vault is one `.vltb` file protected by a user-chosen passphrase; VultBridge has
-no account system, server dependency, recovery key, or passphrase-recovery service.
+VultBridge is a local Java desktop application for storing files in one portable, encrypted,
+authenticated `.vltb` vault. It has no account, server, recovery key, or passphrase-recovery service.
 
-## MVP scope
+## Product scope
 
-The MVP is intentionally narrow:
+The MVP provides:
 
-- One flat list of files with no folders or directory import.
-- At most 10,000 live files and 100 GiB of live file data per vault.
-- Individual regular-file import and explicit export.
-- Logical deletion followed by optional Compact & Replace space reclamation.
-- Manual encrypted backup by copying a closed `.vltb` file.
-- macOS and Linux as the eventual release targets.
+- Vault creation, unlock, lock, close, and manual closed-vault backup.
+- Import of regular files into a single flat list.
+- Explicit export to ordinary host files.
+- Logical deletion and **Compact & Replace** for reclaiming space in a validated replacement vault.
+- Up to 10,000 stored files and 100 GiB of live file data per vault.
 
-Files that need a directory hierarchy should be archived before import. VultBridge does not create,
-inspect, or extract archives.
+There is no folder UI, directory import, search, preview, editing, mounting, sync, cloud storage,
+or archive extraction. To preserve a directory hierarchy, archive it outside VultBridge and import
+the archive as one regular file.
 
-## Security model
+## Technical design
 
-VultBridge v1 uses:
-
-- Argon2id v1.3 for passphrase-based key derivation.
-- ChaCha20-Poly1305 for authenticated encryption.
-- HKDF-SHA-256 for key separation.
-- HMAC-SHA-256 for authenticated mutable header slots.
-- Independent per-record keys and 4 MiB streaming FILE chunks.
-- An append-only record log with two authenticated commit-pointer slots.
-
-Passphrases must contain 8–64 printable ASCII characters. Forgotten passphrases cannot be
-recovered.
-
-VultBridge protects a locked vault from offline content disclosure and undetected modification. It
-does not protect plaintext or passphrases on a compromised host while the vault is unlocked. The
-host can observe the vault filename, total physical size, host timestamps, and update timing. V1
-also exposes imported-file sizes through public record framing.
-
-## Requirements
-
-- JDK 21
-- macOS 26.5.2 on local APFS, or Ubuntu 22.04.5 LTS on local ext4 for the current tested paths
-- Linux overlay/virtiofs, network filesystems, removable media, and other unverified filesystem
-  types remain rejected by the runtime
-
-The committed Gradle Wrapper provides the pinned Gradle version; a separate Gradle installation is
-not required.
-
-Read the complete [user guide](docs/user-guide.md) for the passphrase/trust model, metadata
-disclosures, logical deletion, Compact & Replace, manual backups, troubleshooting, and support
-boundaries. Public tester bundles are under `bundle/` when explicitly promoted; release verification
-records are under `docs/release/`.
-
-## Build and run
-
-On systems where Java 21 is not already selected, point `JAVA_HOME` at the JDK before invoking the
-wrapper.
-
-```bash
-export JAVA_HOME=/usr/local/opt/openjdk@21
-./gradlew run
-```
-
-Run the complete required quality gate with:
-
-```bash
-JAVA_HOME=/usr/local/opt/openjdk@21 ./gradlew spotlessApply clean build
-```
-
-Run only the tests with:
-
-```bash
-JAVA_HOME=/usr/local/opt/openjdk@21 ./gradlew test
-```
-
-Run dependency vulnerability analysis separately with:
-
-```bash
-JAVA_HOME=/usr/local/opt/openjdk@21 ./gradlew dependencyCheckAnalyze
-```
-
-OWASP Dependency-Check downloads current vulnerability data and may require an NVD API key.
-
-## Source layout
+VultBridge is built with Java 21, JavaFX, Gradle, Bouncy Castle, and Jackson CBOR. The code is
+organized around explicit boundaries:
 
 ```text
-src/main/java/com/vultbridge/
-  app/       application entry point and state transitions
-  crypto/    passphrase handling, key hierarchy, and cryptographic primitives
-  platform/  file dialogs, filesystem policy, source inspection, export targets, and sidecar locking
-  service/   background work, sessions, creation/unlock, import, export, and logical deletion
-  ui/        JavaFX screens, dialogs, and metadata-only view models
-  vault/     v1 binary format, records, CBOR, commits, and durability protocol
+app/       JavaFX entry point and scene navigation
+ui/        views, dialogs, and metadata-only view models
+service/   session ownership and import/export/delete/compact operations
+vault/     binary format, records, manifests, commits, and persistence
+crypto/    passphrase handling, KDF, key separation, AEAD, HMAC, and wiping
+platform/  file dialogs, filesystem policy, sidecar locking, and safe publication
 ```
 
-The `vault` and `crypto` packages remain independent of JavaFX. UI state contains metadata only and
-must not receive passphrases, keys, complete manifest plaintext, or file-content buffers.
+The UI receives file metadata and progress only. Passphrases, keys, complete manifest bytes, and
+file-content buffers remain outside the UI layer. A bounded background executor performs I/O and
+cryptographic work so large files are never loaded into memory as a whole.
 
-## Dependencies and reproducibility
+## Cryptographic design
 
-Runtime and build dependencies use exact versions. Gradle dependency locking applies to every
-resolvable configuration, and lockfiles are committed. The principal runtime libraries are:
+- Passphrases are 8–64 printable ASCII characters. They are not persisted and cannot be recovered.
+- Argon2id v1.3 derives a 32-byte key using a 16-byte random salt, 65,536 KiB, three iterations,
+  and parallelism one. Reader-side bounds reject unreasonable KDF parameters before work begins.
+- Each vault has a random 32-byte master vault key (MVK). The passphrase-derived key wraps the MVK
+  with ChaCha20-Poly1305 using canonical associated data.
+- HKDF-SHA-256 derives a header-MAC key and independent per-record keys from the MVK, vault ID,
+  and record ID.
+- ChaCha20-Poly1305 authenticates file chunks, manifests, and commits. Header slots use
+  HMAC-SHA-256 to authenticate the current commit pointer.
 
-- OpenJFX 21.0.7 — GNU GPL v2 with the Classpath Exception.
-- Bouncy Castle `bcprov-jdk18on` 1.84 — Bouncy Castle Licence.
-- Jackson CBOR 2.22.0 — Apache License 2.0.
+## Storage and durability
 
-After an intentional dependency change, regenerate locks and review the resulting diff:
+A vault is an append-only binary file with a fixed header, encrypted CBOR MANIFEST/COMMIT records,
+and encrypted FILE records. File data is streamed in 4 MiB chunks; every chunk is authenticated and
+uses associated data containing its role, record ID, index, and exact plaintext length.
+
+Updates append records, force them to storage, then publish the inactive one of two authenticated
+commit slots and force again. If an update is interrupted, unlock falls back to the prior valid
+commit. Checked 64-bit range arithmetic, strict CBOR parsing, pre-allocation limits, authenticated
+record references, and exact stored-length validation protect the parser from malformed vaults.
+A same-directory sidecar lock prevents concurrent writers and multiple unlocked sessions.
+
+## Security boundaries
+
+When locked, names and file contents are encrypted and authenticated. The host can still observe
+the vault filename, physical size, filesystem timestamps, update timing, and imported-file sizes
+exposed by the v1 record framing. While unlocked, a compromised host may capture passphrases, keys,
+plaintext, or application memory. Logical deletion does not securely erase old ciphertext, and the
+format does not detect rollback to an older valid vault copy. Exported files are unencrypted host
+files and must be protected separately.
+
+## Run and build
+
+Use JDK 21 and the Gradle Wrapper:
 
 ```bash
-./gradlew dependencies --write-locks
-./gradlew spotlessApply clean build
-./gradlew dependencyCheckAnalyze
+./gradlew run
+./gradlew test
 ```
 
-Build current-host release archives only with an explicit native-packager version:
+Create a native package for the current macOS or Linux host:
 
 ```bash
 ./gradlew --no-configuration-cache -PreleaseVersion=1.0.0 releasePackage
 ```
 
-This creates a `jlink` runtime, a `jpackage` app-image, final host archives, a single OS SHA-256
-manifest, and a package-content check under `build/release/`. It does not sign or notarize the
-result. Review the generated files, then use the explicit promotion instructions in
-`release/README.md` to copy them into `bundle/`; no Gradle task writes to `bundle/`.
+Generated app images, archives, and manifests are written under `build/release/`. Reviewed public
+bundles are under `bundle/`; build, verification, and promotion steps are in
+[`bundle/build-instructions.md`](bundle/build-instructions.md). The project uses Spotless, JUnit,
+Error Prone, SpotBugs, dependency locking, and OWASP Dependency-Check as quality controls. The
+dependency inventory is recorded in [`docs/dependency-licenses.md`](docs/dependency-licenses.md).
 
-Do not add or upgrade a runtime dependency without reviewing its maintenance status, license,
-security advisories, transitive changes, and lockfile changes.
+Current bundle targets are x86_64 macOS and Linux. Runtime filesystem verification currently covers
+local APFS on macOS and local ext4 on Ubuntu; network, removable, and other unverified filesystems
+are outside the supported boundary.
+
+## Screenshots
+
+![Welcome screen](https://drive.google.com/file/d/1zO2beu1nCjcPZmWSAem7EhO1k3xiQ5pa/view?usp=drive_link)
+
+![Vault creation screen](https://drive.google.com/file/d/1uCVpvYYjGn3JWOJCamWO5bGFp-G5O4ts/view?usp=drive_link)
+
+![Unlocked vault screen](https://drive.google.com/file/d/1wne3XwQqXFhRX7ZRCorc-L9rTlbC9dgg/view?usp=drive_link)

@@ -175,6 +175,8 @@ if ! cmp -s "$temporary_directory/expected" "$actual"; then
   exit 1
 fi
 
+sh "$(dirname "$0")/verify-release-archives.sh" "$bundle_directory"
+
 unexpected=$(find "$bundle_directory" -mindepth 1 -maxdepth 1 ! -name 'release-manifest.txt' -print \
   | while IFS= read -r entry; do
       file=${entry#"$bundle_directory"/}

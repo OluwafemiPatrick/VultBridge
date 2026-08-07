@@ -20,13 +20,14 @@ case "$destination_directory" in
   */macos|*/linux) ;;
   *) echo "The destination must be bundle/macos or bundle/linux." >&2; exit 2 ;;
 esac
-if find "$source_directory" -maxdepth 1 -type f -name '*.asc' -print | grep . >/dev/null 2>&1; then
-  echo "Detached release-manifest.txt.asc files are prohibited by Phase 7." >&2
-  exit 1
-fi
-
 sh "$(dirname "$0")/verify-release-manifest.sh" \
   "$source_directory" "$source_directory/release-manifest.txt"
+
+source_tree_state=$(awk -F '\t' '$1 == "sourceTreeState" {print $2}' "$source_directory/release-manifest.txt")
+if [ "$source_tree_state" != "clean" ]; then
+  echo "Refusing to promote an artifact built from a dirty source tree." >&2
+  exit 1
+fi
 
 parent_directory=$(dirname "$destination_directory")
 mkdir -p "$parent_directory"
@@ -46,10 +47,6 @@ for archive_name in $archive_names; do
   cp -p "$source_directory/$archive_name" "$staging_directory/$archive_name"
 done
 cp -p "$source_directory/release-manifest.txt" "$staging_directory/release-manifest.txt"
-if find "$staging_directory" -maxdepth 1 -type f -name '*.asc' -print | grep . >/dev/null 2>&1; then
-  echo "Detached release-manifest.txt.asc files are prohibited by Phase 7." >&2
-  exit 1
-fi
 sh "$(dirname "$0")/verify-release-manifest.sh" \
   "$staging_directory" "$staging_directory/release-manifest.txt"
 mv "$staging_directory" "$destination_directory"

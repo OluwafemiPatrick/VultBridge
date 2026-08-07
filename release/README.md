@@ -1,106 +1,61 @@
 # Release tooling
 
-The release tasks build only the current native host. They never cross-compile or imply that an
-OS, filesystem, removable medium, or signing identity has been verified. All generated release
-archives and manifests stay under `build/` by default. Gradle never writes or overwrites `bundle/`.
+Scripts for building, inspecting, verifying, and promoting the native packages produced under
+`build/release/`. The end-to-end workflow is documented in
+[`bundle/build-instructions.md`](../bundle/build-instructions.md).
 
-## Build generated release artifacts
+## Verification
 
-Use a native host and an explicit packager version. macOS creates a `.zip` and `.dmg`; Linux creates
-a `.tar.gz`. The outer filenames intentionally contain no release version; the one OS manifest
-records it:
+Verify an archive directory and its manifest:
 
 ```bash
-./gradlew --no-configuration-cache -PreleaseVersion=1.0.0 releasePackage
-```
-
-Expected output on the current x86_64 hosts:
-
-```text
-build/release/archives/macos/
-  VultBridge-x86_64.zip
-  VultBridge-x86_64.dmg
-  release-manifest.txt
-
-build/release/archives/linux/
-  VultBridge-x86_64.tar.gz
-  release-manifest.txt
-```
-
-Only the directory for the native host is generated. A macOS build does not create a Linux bundle,
-and a Linux build does not create a macOS bundle. Do not rename a host artifact and call it a
-cross-platform release.
-
-Inspect and verify generated output before any promotion:
-
-```bash
-VULTBRIDGE_EXPECTED_RELEASE_VERSION=1.0.0 \
-VULTBRIDGE_EXPECTED_ARCHITECTURE=x86_64 \
-VULTBRIDGE_EXPECTED_SOURCE_REVISION="$(git rev-parse HEAD)" \
-  sh release/verify-release.sh build/release/archives/macos \
+sh release/verify-release.sh \
+  build/release/archives/macos \
   build/release/archives/macos/release-manifest.txt
 ```
 
-The verifier checks the exact archive set, numeric manifest version/platform/architecture/status,
-source revision, byte sizes, SHA-256 hashes, absence of symlinks, and rejection of
-`release-manifest.txt.asc`. It does not hash the manifest itself, avoiding a circular value. The
-expected values bind verification to a particular source checkout and release inventory. Public
-bundle verification omits those bindings because the bundle may be committed in a later
-artifact-only commit than the source revision that built its application bytes.
+Use the corresponding `linux` directory on Linux. `verify-release.sh` validates the manifest and
+then checks archive members; it also inspects `build/release/app-image` when that directory exists.
+The manifest records the package version, OS, architecture, source revision, archive hashes, and
+archive sizes.
 
-## Explicit manual promotion into `bundle/`
+Inspect an app image directly:
 
-`bundle/` is reserved for reviewed public artifacts. The normal Gradle build does not create it or
-overwrite existing contents. After reviewing and testing the generated directory, promote it
-explicitly:
+```bash
+sh release/inspect-app-image.sh build/release/app-image
+```
+
+After a signed macOS build, verify the application bundle and its team identifier:
+
+```bash
+VULTBRIDGE_MACOS_TEAM_IDENTIFIER=TEAMID1234 \
+  sh release/verify-macos.sh build/release/app-image/VultBridge.app
+```
+
+## Promotion
+
+Copy a verified host package into the reviewed repository bundle:
 
 ```bash
 sh release/promote-bundle.sh \
   build/release/archives/macos bundle/macos
 ```
 
-The script refuses an existing destination, copies only the expected archives and the corresponding
-single `release-manifest.txt`, verifies the staged copy, and removes its temporary staging directory.
-It never creates a `.asc` file. To replace a published bundle, preserve the old directory, review
-the replacement separately, and choose the final destination deliberately; do not ask a build task
-to overwrite it.
+The destination must not already exist. The script copies only the expected archives and the one
+manifest, verifies the staged copy, and installs it atomically.
 
-After promotion, verify using only the public bundle:
+## macOS release helpers
 
-```bash
-sh release/verify-release.sh bundle/macos bundle/macos/release-manifest.txt
-```
-
-Only after hashes and tests are recorded may generated output be cleaned:
+The repository includes optional helpers for a credentialed macOS release. They operate on the
+generated app image or final package and require credentials configured on the build machine:
 
 ```bash
-./gradlew clean
+sh release/sign-macos.sh build/release/app-image/VultBridge.app
+
+VULTBRIDGE_NOTARY_PROFILE=profile-name \
+  sh release/notarize-macos.sh \
+  build/release/archives/macos/VultBridge-x86_64.dmg
 ```
 
-The committed `bundle/` files are not under `build/` and are not removed by that command.
-
-## macOS signing status
-
-The current release mode is explicitly `unsigned-ad-hoc` because no Apple Developer ID identity or
-notarization credentials are available. This is not an Apple-trusted or notarized release. Testers
-must follow the user-controlled macOS approval flow documented in `bundle/README.md` when Gatekeeper
-blocks first launch.
-
-The future credentialed path remains available for a separately approved release:
-
-```bash
-VULTBRIDGE_MACOS_SIGNING_IDENTITY='Developer ID Application: ...' \
-VULTBRIDGE_MACOS_TEAM_IDENTIFIER='TEAMID1234' \
-  sh release/sign-macos.sh build/release/app-image/VultBridge.app
-```
-
-After signing, rebuild the final archive, regenerate the build manifest, and independently verify
-the signed bundle. Notarization/stapling must use an external keychain profile and must be completed
-before final archive hashing. The signed path never treats an ad-hoc signature as success.
-
-## Linux integrity status
-
-The current Linux release mode is `hashes-only`. No detached GPG signature or
-`release-manifest.txt.asc` is generated for any OS bundle. Hashes protect against accidental or
-post-download modification only when the manifest itself was obtained through a trusted channel.
-Signing credentials and keys are not part of this repository or the bundle.
+After changing the app or package, rebuild the final archive and regenerate its manifest before
+promotion.

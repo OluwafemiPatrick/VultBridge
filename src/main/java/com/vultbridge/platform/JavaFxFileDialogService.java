@@ -22,7 +22,7 @@ public final class JavaFxFileDialogService implements FileDialogService {
   public Optional<Path> chooseNewVault(Window owner) {
     var chooser = new FileChooser();
     chooser.setTitle("Create VultBridge vault");
-    chooser.setInitialFileName("MyVault.vltb");
+    chooser.setInitialFileName("MyVault");
     chooser.getExtensionFilters().add(VAULT_FILTER);
     var selected = chooser.showSaveDialog(owner);
     return selected == null ? Optional.empty() : Optional.of(selected.toPath());

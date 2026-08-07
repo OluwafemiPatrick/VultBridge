@@ -311,7 +311,7 @@ tasks.register<VerifyReleaseDependenciesTask>("verifyReleaseDependencies") {
     buildScript.set(layout.projectDirectory.file("build.gradle.kts"))
     dependencyLock.set(layout.projectDirectory.file("gradle.lockfile"))
     settingsDependencyLock.set(layout.projectDirectory.file("settings-gradle.lockfile"))
-    licenseReview.set(layout.projectDirectory.file("docs/release/dependency-licenses.md"))
+    licenseReview.set(layout.projectDirectory.file("docs/dependency-licenses.md"))
     packageContent.set(layout.projectDirectory.dir("release/package-content"))
     runtimeClasspath.from(configurations.runtimeClasspath)
 }
@@ -333,6 +333,7 @@ val preparedPackageContentDirectory = layout.buildDirectory.dir("release/package
 val releaseHostOs = releaseHostOsName()
 val releaseHostArchitecture = releaseHostArchitectureName()
 val releaseArchiveDirectory = layout.buildDirectory.dir("release/archives/$releaseHostOs")
+val releaseArchiveInspector = layout.projectDirectory.file("release/verify-release-archives.sh")
 
 tasks.register("prepareReleasePackageContent") {
     group = "release"
@@ -501,6 +502,7 @@ tasks.register("releaseManifest") {
     dependsOn("releaseArchives")
     inputs.property("releaseVersion", releasePackageVersion)
     inputs.dir(releaseArchiveDirectory)
+    inputs.file(releaseArchiveInspector)
     outputs.file(releaseArchiveDirectory.map { it.file("release-manifest.txt") })
     doLast {
         validateReleaseVersion(releasePackageVersion.get())
@@ -510,6 +512,13 @@ tasks.register("releaseManifest") {
         check(releaseHostArchitecture != "unsupported") {
             "Unsupported release architecture: ${System.getProperty("os.arch")}"
         }
+        runCommand(
+            listOf(
+                "sh",
+                releaseArchiveInspector.asFile.absolutePath,
+                releaseArchiveDirectory.get().asFile.absolutePath,
+            ),
+        )
         val artifactRoot = releaseArchiveDirectory.get().asFile.toPath()
         val expectedNames = releaseArchiveNames(releaseHostOs, releaseHostArchitecture)
         val entries =
