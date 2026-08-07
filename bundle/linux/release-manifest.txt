@@ -1,0 +1,10 @@
+VULTBRIDGE-RELEASE-MANIFEST	2
+name	VultBridge
+version	1.0.0
+os	linux
+architecture	x86_64
+sourceRevision	2c4580a3b7958a9e49f4a1b562ccffd8eb2f442d
+sourceTreeState	clean
+signatureStatus	hashes-only
+files
+da0c3e581208c32a71cdb2086dcdde08dc3b50920946d16a32148945284fc8e1	51975655	VultBridge-x86_64.tar.gz

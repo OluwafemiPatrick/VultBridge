@@ -9,8 +9,8 @@ source revision, distribution status, archive sizes, and SHA-256 hashes.
 
 - macOS: use `macos/VultBridge-x86_64.dmg` for a conventional disk-image installation, or
   `macos/VultBridge-x86_64.zip` to extract the application directly.
-- Linux: use `linux/VultBridge-x86_64.tar.gz` when that directory has been independently built and
-  tested on the supported Linux environment.
+- Linux: use `linux/VultBridge-x86_64.tar.gz` on the tested local ext4 environment; independent
+  clean-machine confirmation is still requested before broadening the support claim.
 
 The filename intentionally has no version. Read the matching OS `release-manifest.txt` for the
 version and confirm that the archive filename, byte size, and SHA-256 value match before launching.

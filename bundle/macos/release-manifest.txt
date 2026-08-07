@@ -3,9 +3,9 @@ name	VultBridge
 version	1.0.0
 os	macos
 architecture	x86_64
-sourceRevision	089b5767762f5331788542cbea0b146dccec7d58
+sourceRevision	2c4580a3b7958a9e49f4a1b562ccffd8eb2f442d
 sourceTreeState	clean
 signatureStatus	unsigned-ad-hoc
 files
-c6ac7444669a590c4ed671306ed84564595ac652775849c9720aafc6c8a1ed4b	46403699	VultBridge-x86_64.zip
-7f7269687265b87a06078688958f41bc85a3a4ee101becdf41b4e9ac07471bd7	48705095	VultBridge-x86_64.dmg
+0a8254c318047e5c29e528e5e6ee29a516d3b1e2d31101819f3f1876cc392877	46403754	VultBridge-x86_64.zip
+8224f904377500f7ec95be6252ef2c28904592fe8e15cbc01223ef4a2dc98dfd	48704807	VultBridge-x86_64.dmg
