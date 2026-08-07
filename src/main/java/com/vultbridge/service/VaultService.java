@@ -5,7 +5,6 @@ import com.vultbridge.platform.VaultAccessException;
 import com.vultbridge.platform.VaultAlreadyOpenException;
 import com.vultbridge.vault.VaultDataException;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.List;
@@ -23,9 +22,9 @@ public final class VaultService implements AutoCloseable {
   private final CompactionSourceRemover sourceRemover;
   private VaultSession session;
 
-  /** Creates a service using normal filesystem deletion for validated source removal. */
+  /** Creates a service using fail-closed source retention until an identity-safe remover exists. */
   public VaultService() {
-    this(Files::delete);
+    this(CompactionSourceRemover.retainSource());
   }
 
   VaultService(CompactionSourceRemover sourceRemover) {
@@ -143,12 +142,13 @@ public final class VaultService implements AutoCloseable {
   }
 
   /**
-   * Compacts the current vault into a validated timestamped replacement and removes the exact
-   * source path only after validation succeeds.
+   * Compacts the current vault into a validated timestamped replacement and applies the fail-closed
+   * source-removal policy only after validation succeeds.
    *
    * <p>The operation is intended to run through the application-owned background worker. It owns no
    * passphrase input, retains only the service session, and returns metadata-only terminal results.
-   * Cancellation and failures before source removal leave the source session usable.
+   * The portable default retains the source because Java has no identity-safe conditional unlink;
+   * cancellation and failures leave the source session usable.
    */
   public CompactionResult compact(Path destinationDirectory, VaultOperationControl control)
       throws VaultOperationException, JobCancelledException {
@@ -276,22 +276,21 @@ public final class VaultService implements AutoCloseable {
     }
 
     Path sourcePath = source.vaultPath();
-    boolean sourceIdentityMatches = source.sourceIdentityMatches();
     boolean sourceRemoved = false;
     try {
-      // Release the source channel and sidecar lock before the normal unlink. Java has no portable
-      // conditional-unlink primitive, so the identity check plus deletion is deliberately not
-      // described as atomic or secure erasure; preserving data is preferred if identity is lost.
-      source.close();
-      if (sourceIdentityMatches) {
+      // Keep the source channel and sidecar lock until the identity check and removal policy have
+      // completed. The production policy deliberately retains the source because Java has no
+      // portable conditional-unlink primitive. A platform adapter must prove identity-safe removal
+      // before it can return true; a changed identity or failed removal retains the source.
+      if (source.sourceIdentityMatches()) {
         try {
-          sourceRemover.remove(sourcePath);
-          sourceRemoved = true;
+          sourceRemoved = sourceRemover.remove(sourcePath);
         } catch (IOException | SecurityException ignored) {
           // A validated replacement is still successful when source removal cannot complete.
         }
       }
     } finally {
+      source.close();
       session = replacement;
     }
     return CompactionResult.completed(sourceRemoved, validated);

@@ -12,6 +12,7 @@ import com.vultbridge.platform.VaultAlreadyOpenException;
 import com.vultbridge.platform.VaultSidecarLock;
 import com.vultbridge.vault.FixedHeaderCodec;
 import com.vultbridge.vault.HeaderSlotAuthenticator;
+import com.vultbridge.vault.RecordRef;
 import com.vultbridge.vault.UnverifiedHeaderSlot;
 import com.vultbridge.vault.VaultFormat;
 import java.io.IOException;
@@ -205,6 +206,31 @@ class VaultCreationAndUnlockTest {
   }
 
   @Test
+  void tamperedFileFrameFallsBackWithoutExposingItsManifest() throws Exception {
+    Path vault = temporaryDirectory.resolve("tampered-file.vltb");
+    Path source = temporaryDirectory.resolve("secret.bin");
+    Files.write(source, new byte[] {1, 2, 3, 4});
+    RecordRef fileReference;
+    try (var passphrase = passphrase();
+        var session = VaultCreator.create(vault, passphrase)) {
+      VaultImporter.importFiles(session, java.util.List.of(source), new NeverCancelledControl());
+      fileReference = session.manifest().entries().getFirst().fileRef();
+    }
+
+    try (var channel = FileChannel.open(vault, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
+      mutateByte(channel, fileReference.offset() + VaultFormat.RECORD_FRAME_HEADER_BYTES);
+      channel.force(true);
+    }
+
+    try (var passphrase = passphrase();
+        var reopened = VaultUnlocker.open(vault, passphrase)) {
+      // The tampered newest candidate is rejected before session construction; only the previous
+      // authenticated empty state may be used as the safe fallback.
+      assertEquals(0, reopened.manifest().fileCount());
+    }
+  }
+
+  @Test
   void anotherJvmCannotAcquireTheSessionLock() throws Exception {
     Path vault = temporaryDirectory.resolve("process-lock.vltb");
     try (var passphrase = passphrase();
@@ -249,5 +275,18 @@ class VaultCreationAndUnlockTest {
 
   private static com.vultbridge.crypto.SensitiveBytes passphrase() {
     return PassphraseEncoding.encode("correct horse battery staple".toCharArray());
+  }
+
+  private static final class NeverCancelledControl implements VaultOperationControl {
+    @Override
+    public boolean isCancellationRequested() {
+      return false;
+    }
+
+    @Override
+    public void checkpoint() {}
+
+    @Override
+    public void reportProgress(JobProgress progress) {}
   }
 }

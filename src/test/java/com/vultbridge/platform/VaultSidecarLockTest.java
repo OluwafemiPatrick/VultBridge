@@ -54,4 +54,19 @@ class VaultSidecarLockTest {
     }
     assertFalse(VaultSidecarLock.isSupportedFileStoreType(null));
   }
+
+  @Test
+  void actualTemporaryFilesystemMatchesTheFailClosedPolicy() throws Exception {
+    String type = Files.getFileStore(temporaryDirectory).type();
+    Path vault = temporaryDirectory.resolve("actual-filesystem.vltb");
+
+    if (VaultSidecarLock.isSupportedFileStoreType(type)) {
+      try (var lock = VaultSidecarLock.acquire(vault)) {
+        assertTrue(lock.isOpen());
+      }
+    } else {
+      assertThrows(VaultAccessException.class, () -> VaultSidecarLock.acquire(vault));
+      assertFalse(Files.exists(vault));
+    }
+  }
 }

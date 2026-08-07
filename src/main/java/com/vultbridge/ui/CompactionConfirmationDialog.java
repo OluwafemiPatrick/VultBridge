@@ -78,7 +78,7 @@ public final class CompactionConfirmationDialog {
             String.join(
                 " ",
                 "If compaction or validation fails, the current vault remains unchanged.",
-                "If source deletion fails after validation, both encrypted files remain.",
+                "If identity-safe source removal is unavailable or fails after validation, both encrypted files remain.",
                 "Deletion is not secure erasure."));
     warningText.setWrapText(true);
     var warning = new VBox(4, warningTitle, warningText);

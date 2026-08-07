@@ -151,7 +151,7 @@ class AppViewTest {
     robot.interact(() -> findVisibleButton("Start compaction").orElseThrow().fire());
 
     Path source = temporaryDirectory.resolve("ui-workflow.vltb");
-    waitUntil(() -> !Files.exists(source) && compactedOutputExists(temporaryDirectory));
+    waitUntil(() -> Files.exists(source) && compactedOutputExists(temporaryDirectory));
     assertTrue(robot.lookup("#unlocked-vault-view").queryAll().size() == 1);
   }
 

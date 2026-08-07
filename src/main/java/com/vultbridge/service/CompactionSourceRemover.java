@@ -4,14 +4,19 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 /**
- * Package-private source-unlink boundary used to exercise post-validation deletion failures.
+ * Package-private source-removal capability used only after replacement validation.
  *
- * <p>The production implementation is the ordinary filesystem delete operation. It is kept behind
- * this narrow boundary so tests can prove that a validated replacement remains active when source
- * removal fails, without weakening the identity check or changing filesystem permissions.
+ * <p>The default service policy is fail-closed retention because Java has no portable conditional
+ * unlink operation. A platform adapter may be supplied only after it can prove that it removes the
+ * expected source inode rather than a competing pathname occupant.
  */
 @FunctionalInterface
 interface CompactionSourceRemover {
-  /** Removes exactly the path supplied by the service. */
-  void remove(Path sourcePath) throws IOException;
+  /** Removes the expected source and returns whether removal actually succeeded. */
+  boolean remove(Path sourcePath) throws IOException;
+
+  /** Returns the production fail-closed policy, which deliberately retains the source. */
+  static CompactionSourceRemover retainSource() {
+    return path -> false;
+  }
 }

@@ -7,10 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.vultbridge.crypto.PassphraseEncoding;
+import com.vultbridge.platform.VaultSidecarLock;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -40,13 +42,13 @@ class VaultServiceCompactionTest {
       assertTrue(preview.outputFileName().matches("source-\\d{8}T\\d{6}Z-[0-9a-f]{6}\\.vltb"));
       CompactionResult result =
           service.compact(temporaryDirectory, preview, new NeverCancelledControl());
-      assertEquals(CompactionOutcome.COMPLETED_SOURCE_REMOVED, result.outcome());
+      assertEquals(CompactionOutcome.COMPLETED_SOURCE_RETAINED, result.outcome());
       compactedVault =
           temporaryDirectory.resolve(result.resultingVault().orElseThrow().vaultDisplayName());
       assertEquals(
           preview.outputFileName(), result.resultingVault().orElseThrow().vaultDisplayName());
       assertEquals(preview.estimate().estimatedCandidateBytes(), Files.size(compactedVault));
-      assertFalse(Files.exists(sourceVault));
+      assertTrue(Files.exists(sourceVault));
       assertTrue(Files.exists(compactedVault));
       assertTrue(service.isOpen());
 
@@ -123,6 +125,38 @@ class VaultServiceCompactionTest {
       assertTrue(Files.exists(replacement));
       assertTrue(service.isOpen());
       assertEquals(1, service.snapshot().manifest().fileCount());
+    }
+  }
+
+  @Test
+  void holdsSourceLockThroughIdentityCheckAndRemoval() throws Exception {
+    Path sourceVault = temporaryDirectory.resolve("locked-removal-source.vltb");
+    Path source = temporaryDirectory.resolve("locked-removal.bin");
+    Files.write(source, new byte[] {1, 2, 3});
+    AtomicBoolean sourceLockWasHeld = new AtomicBoolean();
+    CompactionSourceRemover remover =
+        path -> {
+          try {
+            VaultSidecarLock.acquire(path).close();
+          } catch (com.vultbridge.platform.VaultAlreadyOpenException exception) {
+            sourceLockWasHeld.set(true);
+          } catch (com.vultbridge.platform.VaultAccessException exception) {
+            throw new java.io.IOException("Source lock could not be checked", exception);
+          }
+          Files.delete(path);
+          return true;
+        };
+
+    try (var service = new VaultService(remover);
+        var passphrase = passphrase()) {
+      service.create(sourceVault, passphrase);
+      service.importFiles(List.of(source), new NeverCancelledControl());
+
+      CompactionResult result = service.compact(temporaryDirectory, new NeverCancelledControl());
+
+      assertEquals(CompactionOutcome.COMPLETED_SOURCE_REMOVED, result.outcome());
+      assertTrue(sourceLockWasHeld.get());
+      assertFalse(Files.exists(sourceVault));
     }
   }
 

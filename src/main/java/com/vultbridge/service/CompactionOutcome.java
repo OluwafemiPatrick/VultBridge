@@ -9,10 +9,10 @@ package com.vultbridge.service;
  * replacement and a failed or cancelled operation have different user-visible results.
  */
 public enum CompactionOutcome {
-  /** The replacement validated and the exact source file was removed. */
+  /** The replacement validated and an approved identity-safe remover removed the exact source. */
   COMPLETED_SOURCE_REMOVED,
 
-  /** The replacement validated but removal of the exact source file failed. */
+  /** The replacement validated but the source was retained by policy or removal failure. */
   COMPLETED_SOURCE_RETAINED,
 
   /** The operation was cancelled before source removal. */

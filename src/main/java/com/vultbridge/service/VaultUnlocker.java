@@ -101,7 +101,7 @@ public final class VaultUnlocker {
       try {
         for (AuthenticatedHeaderSlot slot : HeaderSlotAuthenticator.verifyAndOrder(header, keys)) {
           try {
-            VaultManifest manifest = readCandidate(channel, keys, slot);
+            VaultManifest manifest = readValidatedCandidate(channel, keys, slot);
             VaultSession session =
                 new VaultSession(
                     channel,
@@ -172,8 +172,7 @@ public final class VaultUnlocker {
       }
       for (AuthenticatedHeaderSlot slot : HeaderSlotAuthenticator.verifyAndOrder(header, keys)) {
         try {
-          VaultManifest manifest = readCandidate(channel, keys, slot);
-          verifyFileRecords(channel, keys, manifest, slot);
+          VaultManifest manifest = readValidatedCandidate(channel, keys, slot);
           return new VaultSnapshot(vaultDisplayName, manifest, channel.size());
         } catch (VaultDataException ignored) {
           // Try the previous authenticated slot, matching the normal unlock fallback rule.
@@ -232,8 +231,7 @@ public final class VaultUnlocker {
       for (AuthenticatedHeaderSlot slot :
           HeaderSlotAuthenticator.verifyAndOrder(header, transferredKeys)) {
         try {
-          VaultManifest manifest = readCandidate(channel, transferredKeys, slot);
-          verifyFileRecords(channel, transferredKeys, manifest, slot);
+          VaultManifest manifest = readValidatedCandidate(channel, transferredKeys, slot);
           VaultSession session =
               new VaultSession(
                   channel,
@@ -267,7 +265,15 @@ public final class VaultUnlocker {
     }
   }
 
-  private static VaultManifest readCandidate(
+  /**
+   * Reads and fully authenticates one committed candidate before returning any session metadata.
+   *
+   * <p>Manifest authentication alone is insufficient: the manifest contains references to FILE
+   * records whose public framing and encrypted chunks must also be checked before a session can
+   * expose its item list. Keeping this in the one candidate routine prevents normal unlock and
+   * replacement validation from drifting into different trust decisions.
+   */
+  private static VaultManifest readValidatedCandidate(
       FileChannel channel, VaultKeySet keys, AuthenticatedHeaderSlot slot)
       throws IOException, VaultDataException {
     RecordRef commitRef;
@@ -324,6 +330,7 @@ public final class VaultUnlocker {
       }
     }
     commit.requireConsistentWith(commitRef, manifest);
+    verifyFileRecords(channel, keys, manifest, slot);
     return manifest;
   }
 

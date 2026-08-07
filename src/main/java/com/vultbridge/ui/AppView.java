@@ -219,7 +219,7 @@ public final class AppView extends BorderPane implements AutoCloseable {
     operationStatus.setText(
         result.outcome() == CompactionOutcome.COMPLETED_SOURCE_REMOVED
             ? "Compaction complete; the validated replacement is active."
-            : "Compaction succeeded; both encrypted vault files remain because source removal failed.");
+            : "Compaction succeeded; both encrypted vault files remain because safe source removal was unavailable or failed.");
   }
 
   private void createVault(Path path, SensitiveBytes passphrase) {

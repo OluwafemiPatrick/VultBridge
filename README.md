@@ -45,6 +45,11 @@ also exposes imported-file sizes through public record framing.
 The committed Gradle Wrapper provides the pinned Gradle version; a separate Gradle installation is
 not required.
 
+Read the complete [user guide](docs/user-guide.md) for the passphrase/trust model, metadata
+disclosures, logical deletion, Compact & Replace, manual backups, troubleshooting, and support
+boundaries. Public tester bundles are under `bundle/` when explicitly promoted; release verification
+records are under `docs/release/`.
+
 ## Build and run
 
 On systems where Java 21 is not already selected, point `JAVA_HOME` at the JDK before invoking the
@@ -106,6 +111,17 @@ After an intentional dependency change, regenerate locks and review the resultin
 ./gradlew spotlessApply clean build
 ./gradlew dependencyCheckAnalyze
 ```
+
+Build current-host release archives only with an explicit native-packager version:
+
+```bash
+./gradlew --no-configuration-cache -PreleaseVersion=1.0.0 releasePackage
+```
+
+This creates a `jlink` runtime, a `jpackage` app-image, final host archives, a single OS SHA-256
+manifest, and a package-content check under `build/release/`. It does not sign or notarize the
+result. Review the generated files, then use the explicit promotion instructions in
+`release/README.md` to copy them into `bundle/`; no Gradle task writes to `bundle/`.
 
 Do not add or upgrade a runtime dependency without reviewing its maintenance status, license,
 security advisories, transitive changes, and lockfile changes.

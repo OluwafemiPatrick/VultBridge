@@ -1,0 +1,14 @@
+VultBridge third-party notices
+==============================
+
+The release build replaces this inventory with the exact runtime artifact filenames and copies
+the applicable license and notice resources from those resolved JARs into `licenses/`. The two
+licenses that are not shipped as resources by their runtime JARs are committed alongside this
+file:
+
+- `licenses/OpenJFX-GPLv2-with-Classpath-Exception.txt`
+- `licenses/Bouncy-Castle-License.txt`
+
+The runtime dependency versions and their legal-source mapping are recorded in
+`docs/release/dependency-licenses.md`. A release is incomplete unless this notice and the complete
+`licenses/` directory are present in the application image.

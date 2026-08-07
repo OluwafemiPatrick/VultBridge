@@ -1,0 +1,11 @@
+VULTBRIDGE-RELEASE-MANIFEST	2
+name	VultBridge
+version	1.0.0
+os	macos
+architecture	x86_64
+sourceRevision	a3486d91d54c4a3e8436866f011b613a2ec54494
+sourceTreeState	dirty
+signatureStatus	unsigned-ad-hoc
+files
+38dcf31794ed4de17359635b1a24235f83750f93a1de2dbcc37244d7c0e8127c	46403699	VultBridge-x86_64.zip
+25016ca899d1e1f578dc7f125cfe36226c2dfc364f824f5963eb3fae63f10d8a	48708953	VultBridge-x86_64.dmg
