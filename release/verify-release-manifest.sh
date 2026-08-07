@@ -4,6 +4,8 @@ set -eu
 bundle_directory=${1:-}
 manifest=${2:-}
 expected_source_revision=${3:-${VULTBRIDGE_EXPECTED_SOURCE_REVISION:-}}
+expected_release_version=${4:-${VULTBRIDGE_EXPECTED_RELEASE_VERSION:-}}
+expected_architecture=${5:-${VULTBRIDGE_EXPECTED_ARCHITECTURE:-x86_64}}
 
 if [ -z "$bundle_directory" ] || [ -z "$manifest" ]; then
   echo "Usage: $0 <os-bundle-directory> <release-manifest.txt>" >&2
@@ -58,9 +60,9 @@ if ! awk -F '\t' '
     }
     if (metadata_seen[key]++) fail("Duplicate release manifest metadata.")
     if (key == "name" && value != "VultBridge") fail("Invalid release manifest name.")
-    if (key == "version" && value == "") fail("Missing release manifest version.")
+    if (key == "version" && value !~ /^[0-9]+(\.[0-9]+)*$/) fail("Invalid release manifest version.")
     if (key == "os" && value !~ /^(macos|linux)$/) fail("Invalid release manifest OS.")
-    if (key == "architecture" && value !~ /^(x86_64|aarch64)$/) fail("Invalid release manifest architecture.")
+    if (key == "architecture" && value != "x86_64") fail("Invalid release manifest architecture.")
     if (key == "sourceRevision" && value !~ /^[0-9a-f]{40}$/) fail("Invalid release source revision.")
     if (key == "sourceTreeState" && value !~ /^(clean|dirty)$/) fail("Invalid release source-tree state.")
     if (key == "signatureStatus" && value !~ /^(unsigned-ad-hoc|hashes-only)$/) fail("Invalid release signature status.")
@@ -104,6 +106,15 @@ manifest_status=$(manifest_value signatureStatus)
 manifest_source_revision=$(manifest_value sourceRevision)
 if [ -n "$expected_source_revision" ] && [ "$manifest_source_revision" != "$expected_source_revision" ]; then
   echo "The release manifest source revision does not match the expected revision." >&2
+  exit 1
+fi
+manifest_version=$(manifest_value version)
+if [ -n "$expected_release_version" ] && [ "$manifest_version" != "$expected_release_version" ]; then
+  echo "The release manifest version does not match the expected version." >&2
+  exit 1
+fi
+if [ "$manifest_architecture" != "$expected_architecture" ]; then
+  echo "The release manifest architecture does not match the expected architecture." >&2
   exit 1
 fi
 bundle_os=$(basename "$bundle_directory")

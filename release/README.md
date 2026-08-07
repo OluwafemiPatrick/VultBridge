@@ -34,23 +34,19 @@ cross-platform release.
 Inspect and verify generated output before any promotion:
 
 ```bash
-sh release/verify-release.sh build/release/archives/macos \
+VULTBRIDGE_EXPECTED_RELEASE_VERSION=1.0.0 \
+VULTBRIDGE_EXPECTED_ARCHITECTURE=x86_64 \
+VULTBRIDGE_EXPECTED_SOURCE_REVISION="$(git rev-parse HEAD)" \
+  sh release/verify-release.sh build/release/archives/macos \
   build/release/archives/macos/release-manifest.txt
 ```
 
-The verifier checks the exact archive set, manifest version/platform/architecture/status, source
-revision shape, byte sizes, SHA-256 hashes, absence of symlinks, and rejection of
-`release-manifest.txt.asc`. It does not hash the manifest itself, avoiding a circular value.
-To bind verification to a particular source checkout, provide its expected commit explicitly:
-
-```bash
-VULTBRIDGE_EXPECTED_SOURCE_REVISION="$(git rev-parse HEAD)" \
-  sh release/verify-release.sh build/release/archives/macos \
-    build/release/archives/macos/release-manifest.txt
-```
-
-This is optional for a downloaded bundle because the bundle may be committed in a later artifact-
-only commit than the source revision that built its application bytes.
+The verifier checks the exact archive set, numeric manifest version/platform/architecture/status,
+source revision, byte sizes, SHA-256 hashes, absence of symlinks, and rejection of
+`release-manifest.txt.asc`. It does not hash the manifest itself, avoiding a circular value. The
+expected values bind verification to a particular source checkout and release inventory. Public
+bundle verification omits those bindings because the bundle may be committed in a later
+artifact-only commit than the source revision that built its application bytes.
 
 ## Explicit manual promotion into `bundle/`
 

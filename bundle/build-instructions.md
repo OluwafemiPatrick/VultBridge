@@ -20,8 +20,9 @@ tree or generated output.
 From a clean checkout, choose a release version accepted by the native packager:
 
 ```bash
+release_version=1.0.0
 JAVA_HOME=/usr/local/opt/openjdk@21 \
-  ./gradlew --no-configuration-cache -PreleaseVersion=1.0.0 releasePackage
+  ./gradlew --no-configuration-cache -PreleaseVersion="$release_version" releasePackage
 ```
 
 The current x86_64 host produces one of these directories:
@@ -46,16 +47,19 @@ No `release-manifest.txt.asc` is generated for any OS.
 Use the standalone verifier against the generated directory:
 
 ```bash
-sh release/verify-release.sh \
+VULTBRIDGE_EXPECTED_RELEASE_VERSION="$release_version" \
+VULTBRIDGE_EXPECTED_ARCHITECTURE=x86_64 \
+VULTBRIDGE_EXPECTED_SOURCE_REVISION="$(git rev-parse HEAD)" \
+  sh release/verify-release.sh \
   build/release/archives/macos \
   build/release/archives/macos/release-manifest.txt
 ```
 
-It checks the exact OS archive set, version, architecture, status, source revision format, archive
-hashes and sizes, symlink exclusion, and unexpected-file rejection. Inspect the app image while it
-still exists under `build/release/app-image` and run the exact archive on a clean supported machine.
-When verifying from the source checkout, bind the manifest to the build commit explicitly with
-`VULTBRIDGE_EXPECTED_SOURCE_REVISION="$(git rev-parse HEAD)"`.
+It checks the exact OS archive set, numeric version, expected architecture, status, source revision,
+archive hashes and sizes, symlink exclusion, and unexpected-file rejection. Inspect the app image
+while it still exists under `build/release/app-image` and run the exact archive on a clean supported
+machine. The expected values bind verification to the source checkout and intended release
+inventory; use the same variables for the Linux command.
 
 ## Explicitly promote a reviewed release
 

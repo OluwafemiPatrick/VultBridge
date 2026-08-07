@@ -181,9 +181,14 @@ fun releaseHostOsName(): String =
 fun releaseHostArchitectureName(): String =
     when (System.getProperty("os.arch").lowercase()) {
         "x86_64", "amd64" -> "x86_64"
-        "aarch64", "arm64" -> "aarch64"
         else -> "unsupported"
     }
+
+fun validateReleaseVersion(version: String) {
+    check(version.matches(Regex("[0-9]+(\\.[0-9]+)*"))) {
+        "Release version must contain only numeric dot-separated components: $version"
+    }
+}
 
 fun releaseArchiveNames(
     os: String,
@@ -337,6 +342,7 @@ tasks.register("prepareReleasePackageContent") {
     inputs.files(runtimeClasspath)
     outputs.dir(preparedPackageContentDirectory)
     doLast {
+        validateReleaseVersion(releasePackageVersion.get())
         val destination = preparedPackageContentDirectory.get().asFile
         destination.deleteRecursively()
         copy {
@@ -451,6 +457,7 @@ tasks.register("releaseAppImage") {
     inputs.dir(runtimeImageDirectory)
     outputs.dir(appImageDirectory)
     doLast {
+        validateReleaseVersion(releasePackageVersion.get())
         val destination = appImageDirectory.get().asFile
         destination.deleteRecursively()
         destination.mkdirs()
@@ -496,6 +503,7 @@ tasks.register("releaseManifest") {
     inputs.dir(releaseArchiveDirectory)
     outputs.file(releaseArchiveDirectory.map { it.file("release-manifest.txt") })
     doLast {
+        validateReleaseVersion(releasePackageVersion.get())
         check(releaseHostOs != "unsupported") {
             "Release packaging supports macOS and Linux only; found ${System.getProperty("os.name")}"
         }
