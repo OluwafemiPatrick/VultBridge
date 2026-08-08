@@ -1,5 +1,6 @@
 memory/
 docs/
+audit/
 z_*.md
 AGENTS.md
 .gitignore
