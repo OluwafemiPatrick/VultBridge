@@ -3,8 +3,8 @@ name	VultBridge
 version	1.0.3
 os	linux
 architecture	x86_64
-sourceRevision	159206b00f2476fdd2ba149c72ad5867b15d8328
-sourceTreeState	dirty
+sourceRevision	f477d65dbaa967b1f71166d9797c48a7da87a012
+sourceTreeState	clean
 signatureStatus	hashes-only
 files
-58b6c8a6687f1be2eb03de6888f360003d350d6098a12f944cde2d855f60ead1	51982990	VultBridge-x86_64.tar.gz
+ddfd0a672b965440c468fd00694256171f980d3143a2cdcef3fc8cd8322f4fa6	51982804	VultBridge-x86_64.tar.gz
