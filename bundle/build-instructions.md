@@ -40,6 +40,10 @@ build/release/archives/linux/
 Only the directory for the current host is produced. A macOS build does not create a Linux
 package, and a Linux build does not create a macOS package.
 
+When running Linux tests under `xvfb-run` or another wrapper, keep its temporary directory outside
+the checkout (for example, use `TMPDIR=$(mktemp -d /tmp/vultbridge-build.XXXXXX)`). Temporary
+files inside the checkout make the release manifest correctly report a dirty source tree.
+
 ## Verify
 
 Verify the generated directory before sharing or promoting it:
